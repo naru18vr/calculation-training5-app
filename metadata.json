@@ -1,0 +1,6 @@
+{
+  "name": "Calculation Training4 App",
+  "description": "An interactive web application for students in Japan to practice and improve their math calculation skills, from elementary to junior high school levels. Users can select their grade, choose a specific math topic, and take a quiz. The app provides instant feedback, tracks results, and keeps a history of performance.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
