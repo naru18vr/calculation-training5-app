@@ -1,8 +1,8 @@
+// vite.config.ts
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  base: process.env.BASE_PATH ?? '/',
   plugins: [react()],
+  base: '/calculation-training5-app/', // ← リポ名と完全一致・小文字
 })
