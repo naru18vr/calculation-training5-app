@@ -2,6 +2,7 @@ const BACKUP_KEYS = [
     'calculation-training-history',
     'calculation-training-student-profiles-v2',
     'calculation-training-active-profile-v2',
+    'calculation-training-reports-v1',
 ] as const;
 
 interface BackupData {
