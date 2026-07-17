@@ -62,4 +62,5 @@ export interface StudentProfile {
   id: 'grade5' | 'middle2';
   name: string;
   startGrade: '小5' | '中2';
+  dailyGoal: number;
 }
