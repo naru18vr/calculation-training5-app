@@ -2,78 +2,15 @@
 
 import React, { useState, useEffect, useMemo, useReducer, useCallback, useRef } from 'react';
 import { GRADES, TOPICS_BY_GRADE, MAX_ATTEMPTS, ENCOURAGEMENT_MESSAGES, MAX_HISTORY_ENTRIES, NUM_QUESTIONS_OPTIONS, DIFFICULTY_LEVELS } from './constants';
-import type { Grade, Topic, Question, QuizResult, QuestionResult, Difficulty } from './types';
-import { generateQuestions } from './services/questionService';
+import type { Grade, Topic, Question, QuizResult, QuestionResult, Difficulty, StudentProfile } from './types';
+import { generateMixedQuestions, generateQuestions } from './services/questionService';
 import { useStudentProfile } from './hooks/useStudentProfile';
+import { getCourseTopics, getLessonContent, getRecommendedTopic, getTopicProgress, getWeakTopics } from './services/learningService';
+import { isAnswerCorrect } from './services/answerService';
 
 const HISTORY_KEY = 'calculation-training-history';
 
 // --- Helper Functions ---
-const normalizeAnswer = (input: string): string => {
-  const fullWidthMap: Record<string, string> = {
-    '０': '0', '１': '1', '２': '2', '３': '3', '４': '4', '５': '5', '６': '6', '７': '7', '８': '8', '９': '9',
-    'ａ': 'a', 'ｂ': 'b', 'ｃ': 'c', 'ｄ': 'd', 'ｅ': 'e', 'ｆ': 'f', 'ｇ': 'g', 'ｈ': 'h', 'ｉ': 'i', 'ｊ': 'j', 'ｋ': 'k', 'ｌ': 'l', 'ｍ': 'm', 'ｎ': 'n', 'ｏ': 'o', 'ｐ': 'p', 'ｑ': 'q', 'ｒ': 'r', 'ｓ': 's', 'ｔ': 't', 'ｕ': 'u', 'ｖ': 'v', 'ｗ': 'w', 'ｘ': 'x', 'ｙ': 'y', 'ｚ': 'z',
-    'Ａ': 'a', 'Ｂ': 'b', 'Ｃ': 'c', 'Ｄ': 'd', 'Ｅ': 'e', 'Ｆ': 'f', 'Ｇ': 'g', 'Ｈ': 'h', 'Ｉ': 'i', 'Ｊ': 'j', 'Ｋ': 'k', 'Ｌ': 'l', 'Ｍ': 'm', 'Ｎ': 'n', 'Ｏ': 'o', 'Ｐ': 'p', 'Ｑ': 'q', 'Ｒ': 'r', 'Ｓ': 's', 'Ｔ': 't', 'Ｕ': 'u', 'Ｖ': 'v', 'Ｗ': 'w', 'Ｘ': 'x', 'Ｙ': 'y', 'Ｚ': 'z',
-    '（': '(', '）': ')', '＋': '+', '－': '-', '＊': '*', '＝': '=', '，': ',', '．': '.', '／': '/', '：': ':', '＾': '^', '√': '√', 'π': 'π', '～': '-'
-  };
-
-  let normalized = input
-    .split('')
-    .map(char => fullWidthMap[char] || char)
-    .join('')
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/sqrt/g, '√')
-    .replace(/・/g, '*') // Standardize dot to asterisk
-    .replace(/角/g, ''); // Remove "angle" symbol for proofs
-
-  // Handle combined units by replacing the main unit with a comma
-  // e.g., "2m50cm" -> "2,50", "5分30秒" -> "5,30"
-  normalized = normalized
-    .replace(/(\d+(?:\.\d+)?)\s*(?:m|メートル)\s*(\d+(?:\.\d+)?)\s*(?:cm|センチ)?/g, '$1,$2')
-    .replace(/(\d+(?:\.\d+)?)\s*(?:kg|キログラム)\s*(\d+(?:\.\d+)?)\s*(?:g|グラム)?/g, '$1,$2')
-    .replace(/(\d+(?:\.\d+)?)\s*(?:l|リットル)\s*(\d+(?:\.\d+)?)\s*(?:ml|ミリリットル)?/g, '$1,$2')
-    .replace(/(\d+)\s*(?:分)\s*(\d+)\s*(?:秒)?/g, '$1,$2');
-
-  // Standardize remainder format "あまり" or "r"
-  normalized = normalized.replace(/あまり/g, 'r');
-
-  // Strip common units from the end of single-value answers
-  if (!normalized.includes(',')) {
-    // Ordered from longest to shortest to prevent partial matches (e.g., cm² vs cm)
-    const units = ['km/時', 'cm²', 'cm³', 'm²', '時間', 'km', 'cm', 'm', 'kg', 'g', 'l', 'ml', '分', '秒', '度', '円', '個', '人', '%'];
-    for (const unit of units) {
-      if (normalized.endsWith(unit)) {
-        normalized = normalized.slice(0, -unit.length);
-        break;
-      }
-    }
-  }
-
-  // For prime factorization like 2*3^2 or 3^2*2
-  if (normalized.includes('*') && /^[0-9^*]+$/.test(normalized)) {
-    return normalized.split('*').sort().join('*');
-  }
-  
-  // For algebraic factorization like (x+2)(x-3) or (x-3)(x+2)
-  const factors = normalized.match(/\([^)]+\)/g);
-  if (factors && factors.length > 1 && factors.join('') === normalized) {
-    return factors.sort().join('');
-  }
-  
-  // Handle equality proofs like ac=df or df=ac
-  if (normalized.includes('=')) {
-      const parts = normalized.split('=');
-      if (parts.length === 2 && !/^[xy]=/.test(normalized)) { // Avoid affecting equation answers like x=5
-          // also sort characters within each part, so ca=df is same as ac=df
-          const sortedParts = parts.map(p => p.split('').sort().join('')).sort();
-          return sortedParts.join('=');
-      }
-  }
-
-  return normalized;
-};
-
 const formatTime = (ms: number): string => {
     const totalSeconds = Math.round(ms / 1000);
     if (totalSeconds < 1) return "1秒未満";
@@ -125,22 +62,96 @@ const BackButton = ({ onClick, children }: { onClick: () => void, children: Reac
     </button>
 );
 
-const GradeSelector = ({ onSelectGrade }: { onSelectGrade: (grade: Grade) => void }) => (
-    <div className="p-4 sm:p-6">
-        <h2 className="text-2xl font-bold text-center mb-6 text-slate-700">学年を選ぼう</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {GRADES.map((grade) => (
+const LearnerSelector = ({ profiles, activeProfile, onSelect }: {
+    profiles: StudentProfile[];
+    activeProfile: StudentProfile;
+    onSelect: (id: StudentProfile['id']) => void;
+}) => (
+    <div className="px-4 pt-5 sm:px-6">
+        <p className="text-sm font-semibold text-slate-600 mb-2">学習する人</p>
+        <div className="grid grid-cols-2 gap-3">
+            {profiles.map(profile => (
                 <button
-                    key={grade}
-                    onClick={() => onSelectGrade(grade)}
-                    className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg hover:bg-sky-50 transition-all transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50"
+                    key={profile.id}
+                    onClick={() => onSelect(profile.id)}
+                    aria-pressed={profile.id === activeProfile.id}
+                    className={`p-3 rounded-lg border-2 text-left transition-colors ${profile.id === activeProfile.id
+                        ? 'border-sky-500 bg-sky-50 text-sky-800'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-sky-300'}`}
                 >
-                    <span className="text-lg font-bold text-sky-700">{grade}</span>
+                    <span className="block font-bold">{profile.name}</span>
+                    <span className="text-xs">{profile.startGrade}から中3まで</span>
                 </button>
             ))}
         </div>
     </div>
 );
+
+const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixedTest }: {
+    grades: Grade[];
+    history: QuizResult[];
+    onContinue: (grade: Grade, topic: Topic) => void;
+    onSelectGrade: (grade: Grade) => void;
+    onMixedTest: () => void;
+}) => {
+    const courseTopics = getCourseTopics(grades);
+    const recommended = getRecommendedTopic(history, grades);
+    const weakTopics = getWeakTopics(history, grades);
+    const mastered = courseTopics.filter(({ topic }) => getTopicProgress(history, topic.id).mastery >= 80).length;
+    const progress = courseTopics.length === 0 ? 0 : Math.round((mastered / courseTopics.length) * 100);
+
+    return (
+        <div className="p-4 sm:p-6 space-y-5">
+            <section className="bg-gradient-to-br from-sky-500 to-indigo-600 text-white p-5 rounded-xl shadow-lg">
+                <p className="text-sm text-sky-100">今日のおすすめ</p>
+                <h2 className="text-xl font-bold mt-1">{recommended?.topic.name ?? 'コースを準備中'}</h2>
+                {recommended && (
+                    <>
+                        <p className="text-sm text-sky-100 mt-1">{recommended.grade}・習熟度 {getTopicProgress(history, recommended.topic.id).mastery}%</p>
+                        <button onClick={() => onContinue(recommended.grade, recommended.topic)} className="mt-4 w-full bg-white text-sky-700 font-bold py-3 rounded-lg hover:bg-sky-50">
+                            学習を始める
+                        </button>
+                    </>
+                )}
+            </section>
+
+            <section className="bg-white p-4 rounded-xl shadow-md">
+                <div className="flex justify-between text-sm mb-2">
+                    <span className="font-bold text-slate-700">コース進捗</span>
+                    <span className="text-slate-500">{mastered} / {courseTopics.length}単元</span>
+                </div>
+                <div className="h-3 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${progress}%` }} /></div>
+                <p className="text-right text-xs text-slate-500 mt-1">{progress}%</p>
+            </section>
+
+            {weakTopics.length > 0 && (
+                <section>
+                    <h3 className="font-bold text-slate-700 mb-2">復習すると伸びる単元</h3>
+                    <div className="space-y-2">
+                        {weakTopics.map(({ grade, topic, progress: topicProgress }) => (
+                            <button key={topic.id} onClick={() => onContinue(grade, topic)} className="w-full bg-amber-50 border border-amber-200 p-3 rounded-lg text-left flex justify-between">
+                                <span><span className="text-xs text-amber-700">{grade}</span><span className="block font-semibold text-slate-800">{topic.name}</span></span>
+                                <span className="font-bold text-amber-700">{topicProgress.mastery}%</span>
+                            </button>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            <section>
+                <h3 className="font-bold text-slate-700 mb-2">学年から選ぶ</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {grades.map(grade => <button key={grade} onClick={() => onSelectGrade(grade)} className="p-3 bg-white rounded-lg shadow text-sky-700 font-bold hover:bg-sky-50">{grade}</button>)}
+                </div>
+            </section>
+
+            <button onClick={onMixedTest} className="w-full p-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl shadow-md text-left">
+                <span className="block font-bold text-lg">総合テスト</span>
+                <span className="text-sm text-slate-300">これまでの範囲から20問・弱点発見にもおすすめ</span>
+            </button>
+        </div>
+    );
+};
 
 const TopicSelector = ({ topics, onSelectTopic, onBack }: { topics: Topic[], onSelectTopic: (topic: Topic) => void, onBack: () => void }) => (
     <div className="p-4 sm:p-6">
@@ -159,6 +170,24 @@ const TopicSelector = ({ topics, onSelectTopic, onBack }: { topics: Topic[], onS
         </div>
     </div>
 );
+
+const LessonScreen = ({ topic, onStart, onBack }: { topic: Topic; onStart: () => void; onBack: () => void }) => {
+    const lesson = getLessonContent(topic);
+    return (
+        <div className="p-4 sm:p-6">
+            <BackButton onClick={onBack}>単元選択に戻る</BackButton>
+            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                <div className="bg-indigo-600 text-white p-5"><p className="text-sm text-indigo-100">学習ポイント</p><h2 className="text-2xl font-bold">{topic.name}</h2></div>
+                <div className="p-5 space-y-5">
+                    <p className="text-slate-700 leading-7">{lesson.overview}</p>
+                    <div><h3 className="font-bold text-slate-800 mb-2">解くときのポイント</h3><ol className="space-y-2">{lesson.points.map((point, index) => <li key={point} className="flex gap-3"><span className="shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-center font-bold">{index + 1}</span><span>{point}</span></li>)}</ol></div>
+                    <div className="bg-sky-50 border border-sky-200 rounded-lg p-4"><h3 className="font-bold text-sky-800 mb-1">例題</h3><p className="font-mono text-slate-800">{lesson.example}</p></div>
+                    <button onClick={onStart} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg shadow">練習問題へ進む</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const DifficultySelector = ({ onSelect, onBack }: { onSelect: (difficulty: Difficulty) => void, onBack: () => void }) => (
     <div className="p-4 sm:p-6">
@@ -284,7 +313,7 @@ const Quiz = ({
     const handleSubmit = () => {
         if (showExplanation || !userAnswer.trim()) return;
 
-        const isCorrect = normalizeAnswer(userAnswer) === normalizeAnswer(currentQuestion.answer);
+        const isCorrect = isAnswerCorrect(userAnswer, currentQuestion.answer);
 
         if (isCorrect) {
             setResults(prev => [...prev, { question: currentQuestion, attempts, isCorrect: true, isSkipped: false }]);
@@ -437,6 +466,7 @@ const ResultsScreen = ({ result, onRetry, onBackToTop }: { result: QuizResult, o
     }
 
     const correctAnswers = results.filter(r => r.isCorrect).length;
+    const incorrectAnswers = results.filter(r => !r.isCorrect);
     const score = Math.round((correctAnswers / totalQuestions) * 100);
     const timeTaken = Math.round((endTime - startTime) / 1000);
     
@@ -470,6 +500,21 @@ const ResultsScreen = ({ result, onRetry, onBackToTop }: { result: QuizResult, o
                     <p className="text-3xl font-bold text-slate-800">{timeTaken}<span className="text-lg font-medium">秒</span></p>
                 </div>
             </div>
+
+            {incorrectAnswers.length > 0 && (
+                <div className="text-left mb-8">
+                    <h3 className="text-lg font-bold text-slate-700 mb-3">間違えた問題を確認</h3>
+                    <div className="space-y-3">
+                        {incorrectAnswers.map((item, index) => (
+                            <details key={`${item.question.id}-${index}`} className="bg-rose-50 border border-rose-200 rounded-lg p-4">
+                                <summary className="font-semibold text-rose-800 cursor-pointer">{item.question.text}</summary>
+                                <p className="mt-3"><span className="font-bold">正解：</span>{item.question.answer.replace(/\*/g, '×')}</p>
+                                <p className="mt-1 text-sm text-slate-700">{item.question.explanation}</p>
+                            </details>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="space-y-4 sm:space-y-0 sm:flex sm:space-x-4 justify-center">
                 <button onClick={onRetry} className="w-full sm:w-auto px-8 py-3 bg-sky-500 text-white font-bold rounded-lg shadow-md hover:bg-sky-600 transition-all transform hover:-translate-y-0.5 active:translate-y-0">もう一度挑戦</button>
@@ -585,7 +630,7 @@ const ProfileScreen = ({ studentName, updateStudentName, consecutiveDays, onBack
 };
 
 // --- Main App Component ---
-type Screen = 'grade' | 'topic' | 'difficulty' | 'num_questions' | 'quiz' | 'result' | 'history' | 'profile';
+type Screen = 'grade' | 'topic' | 'lesson' | 'difficulty' | 'num_questions' | 'quiz' | 'result' | 'history' | 'profile';
 
 // --- Navigation State Management (useReducer) ---
 type NavState = {
@@ -619,7 +664,7 @@ const App = () => {
     const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
     const [quizStartTime, setQuizStartTime] = useState<number>(0);
     const [history, setHistory] = useState<QuizResult[]>([]);
-    const { studentName, updateStudentName, consecutiveDays, updateConsecutiveDays } = useStudentProfile();
+    const { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, consecutiveDays } = useStudentProfile(history);
 
     useEffect(() => {
         try {
@@ -632,10 +677,6 @@ const App = () => {
             setHistory([]);
         }
     }, []);
-
-    useEffect(() => {
-        updateConsecutiveDays(history);
-    }, [history, updateConsecutiveDays]);
 
     const resetSelection = useCallback(() => {
         setSelectedGrade(null);
@@ -667,6 +708,16 @@ const App = () => {
         dispatch({ type: 'NAVIGATE', to: 'quiz' });
     };
 
+    const handleStartMixedTest = (grades: Grade[]) => {
+        const generatedQuestions = generateMixedQuestions(grades, 20, '標準');
+        setSelectedGrade(activeProfile.startGrade);
+        setSelectedTopic({ id: 'mixed', name: '総合テスト' });
+        setDifficulty('標準');
+        setQuestions(generatedQuestions);
+        setQuizStartTime(Date.now());
+        dispatch({ type: 'NAVIGATE', to: 'quiz' });
+    };
+
     const handleQuizComplete = (results: QuestionResult[]) => {
         if (!selectedGrade || !selectedTopic) {
              navigate('grade');
@@ -675,6 +726,7 @@ const App = () => {
 
         if (results.length > 0) {
             const newResult: QuizResult = {
+                studentId: activeProfile.id,
                 grade: selectedGrade,
                 topic: selectedTopic,
                 difficulty: difficulty,
@@ -702,9 +754,12 @@ const App = () => {
     };
     
     const handleClearHistory = () => {
-        if(window.confirm('本当にすべての学習履歴を削除しますか？')) {
-            setHistory([]);
-            localStorage.removeItem(HISTORY_KEY);
+        if(window.confirm(`${activeProfile.name}さんの学習履歴をすべて削除しますか？`)) {
+            setHistory(current => {
+                const remaining = current.filter(result => (result.studentId ?? 'grade5') !== activeProfile.id);
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(remaining));
+                return remaining;
+            });
         }
     }
     
@@ -721,24 +776,33 @@ const App = () => {
         switch(nav.screen) {
             case 'history': return '学習履歴';
             case 'profile': return 'プロフィール';
-            default: return `計算トレーニング ${studentName ? `| ${studentName}さん` : ''}`;
+            default: return `計算トレーニング | ${activeProfile.name}さん`;
         }
     }
 
     const renderScreen = () => {
         switch (nav.screen) {
             case 'grade':
-                return <GradeSelector onSelectGrade={handleSelectGrade} />;
+                const startIndex = GRADES.indexOf(activeProfile.startGrade);
+                const availableGrades = GRADES.slice(startIndex);
+                return <>
+                    <LearnerSelector profiles={profiles} activeProfile={activeProfile} onSelect={(id) => {
+                        selectProfile(id);
+                        resetSelection();
+                    }} />
+                    <LearningDashboard grades={availableGrades} history={activeHistory} onMixedTest={() => handleStartMixedTest(availableGrades)} onSelectGrade={handleSelectGrade} onContinue={(grade, topic) => {
+                        setSelectedGrade(grade);
+                        setSelectedTopic(topic);
+                        navigate('lesson');
+                    }} />
+                </>;
             case 'topic':
                 return selectedGrade && <TopicSelector topics={TOPICS_BY_GRADE[selectedGrade]} onSelectTopic={(topic) => {
                     setSelectedTopic(topic);
-                    if (['小4', '小5', '小6', '中1', '中2', '中3'].includes(selectedGrade)) {
-                        navigate('difficulty');
-                    } else {
-                        setDifficulty(null);
-                        navigate('num_questions');
-                    }
+                    navigate('lesson');
                 }} onBack={() => navigate('grade')} />;
+            case 'lesson':
+                return selectedTopic && <LessonScreen topic={selectedTopic} onStart={() => navigate('difficulty')} onBack={() => navigate('topic')} />;
             case 'difficulty':
                 return <DifficultySelector onSelect={(diff) => {
                     setDifficulty(diff);
@@ -758,9 +822,9 @@ const App = () => {
             case 'result':
                 return quizResult && <ResultsScreen result={quizResult} onRetry={handleRetry} onBackToTop={() => navigate('grade')} />;
             case 'history':
-                return <HistoryScreen history={history} onBack={() => navigate('grade')} onClearHistory={handleClearHistory} />;
+                return <HistoryScreen history={activeHistory} onBack={() => navigate('grade')} onClearHistory={handleClearHistory} />;
             case 'profile':
-                return <ProfileScreen studentName={studentName} updateStudentName={updateStudentName} consecutiveDays={consecutiveDays} onBack={() => navigate('grade')} />;
+                return <ProfileScreen studentName={activeProfile.name} updateStudentName={updateStudentName} consecutiveDays={consecutiveDays} onBack={() => navigate('grade')} />;
             default:
                 return <div>Error</div>;
         }
