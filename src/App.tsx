@@ -9,6 +9,8 @@ import { getCourseTopics, getLessonContent, getProfileCourseGrades, getRecommend
 import { isAnswerCorrect } from './services/answerService';
 import { downloadBackup, restoreBackup } from './services/backupService';
 import { downloadHistoryCsv } from './services/reportService';
+import { buildDailyReportText, buildWeeklyReportText, copyText, getWeeklySummary, mergeCompatibleReports, quizResultToReport, readReportStore, saveReportRecord } from './services/reportingService';
+import type { LearningReportRecord } from './services/reportingService';
 
 const HISTORY_KEY = 'calculation-training-history';
 
@@ -176,7 +178,17 @@ const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixed
     );
 };
 
-const ParentDashboard = ({ grades, history, learnerName, onBack }: { grades: Grade[]; history: QuizResult[]; learnerName: string; onBack: () => void }) => {
+const CopyReportPanel = ({ text, label }: { text: string; label: string }) => {
+    const [copyState, setCopyState] = useState<'idle' | 'success' | 'error'>('idle');
+    const copy = async () => setCopyState(await copyText(text) ? 'success' : 'error');
+    return <div className="w-full min-w-0">
+        <button onClick={copy} className="min-h-12 w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white text-base font-bold rounded-lg shadow-md whitespace-normal">{label}</button>
+        {copyState === 'success' && <p role="status" className="mt-2 text-sm font-semibold text-emerald-800">✓ コピーできました。Google Chatに貼って送ってね。</p>}
+        {copyState === 'error' && <div role="alert" className="mt-3"><p className="text-sm font-semibold text-rose-800 mb-2">⚠ コピーできませんでした。下の文章を長押しして選択し、手動でコピーしてください。</p><textarea readOnly value={text} onFocus={event => event.currentTarget.select()} className="w-full min-h-48 p-3 text-base border-2 border-rose-300 rounded-lg bg-white resize-y break-words" /></div>}
+    </div>;
+};
+
+const ParentDashboard = ({ grades, history, learnerName, profile, onBack }: { grades: Grade[]; history: QuizResult[]; learnerName: string; profile: StudentProfile; onBack: () => void }) => {
     const topics = getCourseTopics(grades);
     const weakTopics = getWeakTopics(history, grades, 5);
     const totalAnswered = history.reduce((sum, session) => sum + session.results.length, 0);
@@ -184,6 +196,9 @@ const ParentDashboard = ({ grades, history, learnerName, onBack }: { grades: Gra
     const totalMinutes = Math.round(history.reduce((sum, session) => sum + Math.max(0, session.endTime - session.startTime), 0) / 60000);
     const accuracy = totalAnswered ? Math.round(totalCorrect / totalAnswered * 100) : 0;
     const mastered = topics.filter(({ topic }) => getTopicProgress(history, topic.id).mastery >= 80).length;
+    const compatibleReports = mergeCompatibleReports(readReportStore(), history).filter(record => record.studentId === profile.id);
+    const weeklySummary = getWeeklySummary(compatibleReports);
+    const weeklyText = buildWeeklyReportText(weeklySummary, profile);
 
     return <div className="p-4 sm:p-6">
         <BackButton onClick={onBack}>トップに戻る</BackButton>
@@ -193,6 +208,7 @@ const ParentDashboard = ({ grades, history, learnerName, onBack }: { grades: Gra
         </div>
         <section className="bg-white p-4 rounded-xl shadow mb-5"><h3 className="font-bold mb-3">最近の学習</h3>{history.length === 0 ? <p className="text-slate-500">まだ学習記録がありません。</p> : history.slice(0, 7).map((session, index) => { const correct = session.results.filter(result => result.isCorrect).length; return <div key={`${session.endTime}-${index}`} className="flex justify-between py-2 border-b last:border-0"><span><span className="text-xs text-slate-500 block">{new Date(session.endTime).toLocaleDateString('ja-JP')}</span>{session.topic.name}</span><span className="font-bold">{correct}/{session.results.length}</span></div>; })}</section>
         <section className="bg-amber-50 border border-amber-200 p-4 rounded-xl"><h3 className="font-bold text-amber-900 mb-3">重点的に復習したい単元</h3>{weakTopics.length === 0 ? <p className="text-amber-800">学習を進めると苦手単元が表示されます。</p> : weakTopics.map(({ grade, topic, progress }) => <div key={topic.id} className="flex justify-between py-2"><span>{grade}・{topic.name}</span><span className="font-bold text-amber-800">習熟度 {progress.mastery}%</span></div>)}</section>
+        <section className="bg-white p-4 rounded-xl shadow mt-5"><h3 className="font-bold text-slate-800 mb-1">1週間の学習報告</h3><p className="text-sm text-slate-500 mb-3">直近7日間を集計し、Google Chatなどへ貼り付けられます。</p>{weeklySummary.records.length === 0 ? <p className="mb-3 text-slate-600">まだ今週の学習記録がありません。</p> : <div className="grid grid-cols-3 gap-2 text-center mb-3"><div><span className="block text-xl font-bold">{weeklySummary.studyDays}</span><span className="text-xs">学習日</span></div><div><span className="block text-xl font-bold">{weeklySummary.total}</span><span className="text-xs">問題</span></div><div><span className="block text-xl font-bold">{weeklySummary.accuracy}%</span><span className="text-xs">正答率</span></div></div>}<CopyReportPanel text={weeklyText} label="週間報告をコピー" /></section>
     </div>;
 };
 
@@ -506,7 +522,7 @@ const Quiz = ({
     );
 };
 
-const ResultsScreen = ({ result, onRetry, onRetryWrong, onBackToTop }: { result: QuizResult, onRetry: () => void, onRetryWrong: () => void, onBackToTop: () => void }) => {
+const ResultsScreen = ({ result, reportRecord, streak, onRetry, onRetryWrong, onBackToTop }: { result: QuizResult, reportRecord: LearningReportRecord, streak: number, onRetry: () => void, onRetryWrong: () => void, onBackToTop: () => void }) => {
     const { results, startTime, endTime, grade, topic, difficulty } = result;
     const totalQuestions = results.length;
     
@@ -555,6 +571,8 @@ const ResultsScreen = ({ result, onRetry, onRetryWrong, onBackToTop }: { result:
                     <p className="text-3xl font-bold text-slate-800">{timeTaken}<span className="text-lg font-medium">秒</span></p>
                 </div>
             </div>
+
+            <div className="bg-teal-50 border-2 border-teal-200 rounded-xl p-4 mb-8 text-left"><h3 className="font-bold text-lg text-teal-900 mb-1">おうちの人に今日の結果を知らせよう</h3><p className="text-sm text-teal-800 mb-3">文章をコピーして、内容を確認してからGoogle Chatなどに貼って送れます。自動送信はしません。</p><CopyReportPanel text={buildDailyReportText(reportRecord, streak, `${window.location.origin}${window.location.pathname}#history`)} label="おうちの人に報告をコピー" /></div>
 
             {incorrectAnswers.length > 0 && (
                 <div className="text-left mb-8">
@@ -650,9 +668,11 @@ const HistoryScreen = ({ history, onBack, onClearHistory }: { history: QuizResul
 };
 
 
-const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyGoal, consecutiveDays, onBack }: { studentName: string, updateStudentName: (name: string) => void, dailyGoal: number, updateDailyGoal: (goal: number) => void, consecutiveDays: number, onBack: () => void }) => {
+const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyGoal, examDate, targetScore, updateExamSettings, consecutiveDays, onBack }: { studentName: string, updateStudentName: (name: string) => void, dailyGoal: number, updateDailyGoal: (goal: number) => void, examDate?: string, targetScore?: number, updateExamSettings: (date: string, score: number) => void, consecutiveDays: number, onBack: () => void }) => {
     const [name, setName] = useState(studentName);
     const [restoreMessage, setRestoreMessage] = useState('');
+    const [localExamDate, setLocalExamDate] = useState(examDate ?? '');
+    const [localTargetScore, setLocalTargetScore] = useState(targetScore ?? 80);
     const fileInputRef = useRef<HTMLInputElement>(null);
     
     const handleSave = () => {
@@ -683,9 +703,11 @@ const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyG
                 </div>
                 <button onClick={handleSave} className="w-full px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow-md hover:bg-sky-600 transition-colors">保存する</button>
                 <div className="mt-5"><label htmlFor="dailyGoal" className="block text-sm font-medium text-slate-700 mb-1">1日の目標問題数</label><select id="dailyGoal" value={dailyGoal} onChange={event => updateDailyGoal(Number(event.target.value))} className="w-full p-2 border border-slate-300 rounded-md"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div>
+                <div className="border-t mt-6 pt-5"><h3 className="font-bold text-slate-700 mb-1">試験の目標（任意）</h3><p className="text-xs text-slate-500 mb-3">週間報告に残り日数と目標到達状況を表示します。</p><label htmlFor="examDate" className="block text-sm mb-1">試験日</label><input id="examDate" type="date" value={localExamDate} onChange={event => setLocalExamDate(event.target.value)} className="w-full p-2 border rounded-md mb-3" /><label htmlFor="targetScore" className="block text-sm mb-1">目標正答率</label><select id="targetScore" value={localTargetScore} onChange={event => setLocalTargetScore(Number(event.target.value))} className="w-full p-2 border rounded-md mb-3"><option value={60}>60%</option><option value={70}>70%</option><option value={80}>80%</option><option value={90}>90%</option></select><button onClick={() => updateExamSettings(localExamDate, localTargetScore)} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg">試験目標を保存</button></div>
                 <div className="border-t mt-6 pt-5">
                     <h3 className="font-bold text-slate-700 mb-1">学習データ</h3>
                     <p className="text-xs text-slate-500 mb-3">端末変更やデータ消失に備えて保存できます。</p>
+                    <p className="text-xs text-amber-700 mb-3">バックアップには学習記録が含まれます。公開場所へ貼らないでください。</p>
                     <div className="grid grid-cols-2 gap-2">
                         <button onClick={downloadBackup} className="px-3 py-2 bg-emerald-600 text-white font-semibold rounded-lg">バックアップ</button>
                         <button onClick={() => fileInputRef.current?.click()} className="px-3 py-2 bg-slate-600 text-white font-semibold rounded-lg">復元する</button>
@@ -738,18 +760,20 @@ const App = () => {
     const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
     const [quizStartTime, setQuizStartTime] = useState<number>(0);
     const [history, setHistory] = useState<QuizResult[]>([]);
-    const { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, updateDailyGoal, consecutiveDays } = useStudentProfile(history);
+    const { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, updateDailyGoal, updateExamSettings, consecutiveDays } = useStudentProfile(history);
 
     useEffect(() => {
         try {
             const savedHistory = localStorage.getItem(HISTORY_KEY);
             if (savedHistory) {
-                setHistory(JSON.parse(savedHistory));
+                const parsed = JSON.parse(savedHistory) as unknown;
+                setHistory(Array.isArray(parsed) ? parsed as QuizResult[] : []);
             }
         } catch (error) {
             console.error("Failed to load history from localStorage:", error);
             setHistory([]);
         }
+        if (window.location.hash === '#history') dispatch({ type: 'NAVIGATE', to: 'history' });
     }, []);
 
     const resetSelection = useCallback(() => {
@@ -818,6 +842,7 @@ const App = () => {
                 endTime: Date.now(),
             };
             setQuizResult(newResult);
+            saveReportRecord(quizResultToReport(newResult));
             
             setHistory(prev => {
                 const newHistory = [newResult, ...prev];
@@ -914,13 +939,13 @@ const App = () => {
             case 'quiz':
                 return questions.length > 0 && selectedTopic ? <Quiz questions={questions} onQuizComplete={handleQuizComplete} topicName={selectedTopic.name} onBack={() => navigate('num_questions')} /> : <div>Loading...</div>;
             case 'result':
-                return quizResult && <ResultsScreen result={quizResult} onRetry={handleRetry} onRetryWrong={handleRetryWrong} onBackToTop={() => navigate('grade')} />;
+                return quizResult && <ResultsScreen result={quizResult} reportRecord={quizResultToReport(quizResult)} streak={consecutiveDays} onRetry={handleRetry} onRetryWrong={handleRetryWrong} onBackToTop={() => navigate('grade')} />;
             case 'history':
                 return <HistoryScreen history={activeHistory} onBack={() => navigate('grade')} onClearHistory={handleClearHistory} />;
             case 'profile':
-                return <ProfileScreen studentName={activeProfile.name} updateStudentName={updateStudentName} dailyGoal={activeProfile.dailyGoal} updateDailyGoal={updateDailyGoal} consecutiveDays={consecutiveDays} onBack={() => navigate('grade')} />;
+                return <ProfileScreen studentName={activeProfile.name} updateStudentName={updateStudentName} dailyGoal={activeProfile.dailyGoal} updateDailyGoal={updateDailyGoal} examDate={activeProfile.examDate} targetScore={activeProfile.targetScore} updateExamSettings={updateExamSettings} consecutiveDays={consecutiveDays} onBack={() => navigate('grade')} />;
             case 'parent':
-                return <ParentDashboard grades={getProfileCourseGrades(activeProfile)} history={activeHistory} learnerName={activeProfile.name} onBack={() => navigate('grade')} />;
+                return <ParentDashboard grades={getProfileCourseGrades(activeProfile)} history={activeHistory} learnerName={activeProfile.name} profile={activeProfile} onBack={() => navigate('grade')} />;
             case 'test_builder':
                 return <TestBuilder grades={getProfileCourseGrades(activeProfile)} reviewGrade={getProfileCourseGrades(activeProfile)[0]} onStart={handleStartCustomTest} onBack={() => navigate('grade')} />;
             default:
