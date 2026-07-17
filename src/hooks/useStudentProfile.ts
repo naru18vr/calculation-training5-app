@@ -83,5 +83,15 @@ export const useStudentProfile = (history: QuizResult[]) => {
         });
     }, [activeProfileId]);
 
-    return { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, updateDailyGoal, consecutiveDays };
+    const updateExamSettings = useCallback((examDate: string, targetScore: number) => {
+        setProfiles(current => {
+            const updated = current.map(profile => profile.id === activeProfileId
+                ? { ...profile, examDate: examDate || undefined, targetScore }
+                : profile);
+            localStorage.setItem(PROFILES_KEY, JSON.stringify(updated));
+            return updated;
+        });
+    }, [activeProfileId]);
+
+    return { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, updateDailyGoal, updateExamSettings, consecutiveDays };
 };
