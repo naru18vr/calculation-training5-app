@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useMemo, useReducer, useCallback, useRef } from 'react';
 import { GRADES, TOPICS_BY_GRADE, MAX_ATTEMPTS, ENCOURAGEMENT_MESSAGES, MAX_HISTORY_ENTRIES, NUM_QUESTIONS_OPTIONS, DIFFICULTY_LEVELS } from './constants';
 import type { Grade, Topic, Question, QuizResult, QuestionResult, Difficulty, StudentProfile } from './types';
-import { generateMixedQuestions, generateQuestions } from './services/questionService';
+import { generateMixedQuestions, generateQuestions, generateTopicMixQuestions } from './services/questionService';
 import { useStudentProfile } from './hooks/useStudentProfile';
 import { getCourseTopics, getLessonContent, getRecommendedTopic, getTopicProgress, getWeakTopics } from './services/learningService';
 import { isAnswerCorrect } from './services/answerService';
+import { downloadBackup, restoreBackup } from './services/backupService';
 
 const HISTORY_KEY = 'calculation-training-history';
 
@@ -25,7 +26,7 @@ const formatTime = (ms: number): string => {
 
 // --- Components ---
 
-const Header = ({ title, onHistoryClick, onProfileClick, onHomeClick, showHomeButton }: { title: string, onHistoryClick: () => void, onProfileClick: () => void, onHomeClick: () => void, showHomeButton: boolean }) => (
+const Header = ({ title, onHistoryClick, onProfileClick, onParentClick, onHomeClick, showHomeButton }: { title: string, onHistoryClick: () => void, onProfileClick: () => void, onParentClick: () => void, onHomeClick: () => void, showHomeButton: boolean }) => (
     <header className="bg-white shadow-md sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-3">
@@ -38,6 +39,9 @@ const Header = ({ title, onHistoryClick, onProfileClick, onHomeClick, showHomeBu
                     )}
                      <button onClick={onProfileClick} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="プロフィール">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    </button>
+                    <button onClick={onParentClick} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="保護者向け進捗">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6m4 6V7m4 10v-3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                     </button>
                     <button onClick={onHistoryClick} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="学習履歴">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -87,12 +91,13 @@ const LearnerSelector = ({ profiles, activeProfile, onSelect }: {
     </div>
 );
 
-const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixedTest }: {
+const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixedTest, onBuildTest }: {
     grades: Grade[];
     history: QuizResult[];
     onContinue: (grade: Grade, topic: Topic) => void;
     onSelectGrade: (grade: Grade) => void;
     onMixedTest: () => void;
+    onBuildTest: () => void;
 }) => {
     const courseTopics = getCourseTopics(grades);
     const recommended = getRecommendedTopic(history, grades);
@@ -145,12 +150,50 @@ const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixed
                 </div>
             </section>
 
+            <div className="grid sm:grid-cols-2 gap-3">
             <button onClick={onMixedTest} className="w-full p-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl shadow-md text-left">
                 <span className="block font-bold text-lg">総合テスト</span>
                 <span className="text-sm text-slate-300">これまでの範囲から20問・弱点発見にもおすすめ</span>
             </button>
+            <button onClick={onBuildTest} className="w-full p-4 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl shadow-md text-left">
+                <span className="block font-bold text-lg">範囲指定テスト</span>
+                <span className="text-sm text-indigo-200">学校のテスト範囲に合わせて単元を選択</span>
+            </button>
+            </div>
         </div>
     );
+};
+
+const ParentDashboard = ({ grades, history, onBack }: { grades: Grade[]; history: QuizResult[]; onBack: () => void }) => {
+    const topics = getCourseTopics(grades);
+    const weakTopics = getWeakTopics(history, grades, 5);
+    const totalAnswered = history.reduce((sum, session) => sum + session.results.length, 0);
+    const totalCorrect = history.reduce((sum, session) => sum + session.results.filter(result => result.isCorrect).length, 0);
+    const totalMinutes = Math.round(history.reduce((sum, session) => sum + Math.max(0, session.endTime - session.startTime), 0) / 60000);
+    const accuracy = totalAnswered ? Math.round(totalCorrect / totalAnswered * 100) : 0;
+    const mastered = topics.filter(({ topic }) => getTopicProgress(history, topic.id).mastery >= 80).length;
+
+    return <div className="p-4 sm:p-6">
+        <BackButton onClick={onBack}>トップに戻る</BackButton>
+        <h2 className="text-2xl font-bold text-slate-800 mb-5">保護者向け進捗</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {[['学習回数', `${history.length}回`], ['学習時間', `${totalMinutes}分`], ['正答率', `${accuracy}%`], ['習得単元', `${mastered}/${topics.length}`]].map(([label, value]) => <div key={label} className="bg-white p-4 rounded-lg shadow"><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-bold text-slate-800">{value}</p></div>)}
+        </div>
+        <section className="bg-white p-4 rounded-xl shadow mb-5"><h3 className="font-bold mb-3">最近の学習</h3>{history.length === 0 ? <p className="text-slate-500">まだ学習記録がありません。</p> : history.slice(0, 7).map((session, index) => { const correct = session.results.filter(result => result.isCorrect).length; return <div key={`${session.endTime}-${index}`} className="flex justify-between py-2 border-b last:border-0"><span><span className="text-xs text-slate-500 block">{new Date(session.endTime).toLocaleDateString('ja-JP')}</span>{session.topic.name}</span><span className="font-bold">{correct}/{session.results.length}</span></div>; })}</section>
+        <section className="bg-amber-50 border border-amber-200 p-4 rounded-xl"><h3 className="font-bold text-amber-900 mb-3">重点的に復習したい単元</h3>{weakTopics.length === 0 ? <p className="text-amber-800">学習を進めると苦手単元が表示されます。</p> : weakTopics.map(({ grade, topic, progress }) => <div key={topic.id} className="flex justify-between py-2"><span>{grade}・{topic.name}</span><span className="font-bold text-amber-800">習熟度 {progress.mastery}%</span></div>)}</section>
+    </div>;
+};
+
+const TestBuilder = ({ grades, onStart, onBack }: { grades: Grade[]; onStart: (topics: Topic[], count: number, difficulty: Difficulty) => void; onBack: () => void }) => {
+    const courseTopics = getCourseTopics(grades);
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [count, setCount] = useState(20);
+    const [level, setLevel] = useState<Difficulty>('標準');
+    const toggle = (id: string) => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+    return <div className="p-4 sm:p-6"><BackButton onClick={onBack}>トップに戻る</BackButton><h2 className="text-2xl font-bold mb-2">範囲指定テスト</h2><p className="text-sm text-slate-500 mb-5">出題したい単元を1つ以上選んでください。</p>
+        {grades.map(grade => <section key={grade} className="mb-5"><div className="flex justify-between mb-2"><h3 className="font-bold">{grade}</h3><button onClick={() => setSelected(current => { const next = new Set(current); TOPICS_BY_GRADE[grade].forEach(topic => next.add(topic.id)); return next; })} className="text-sm text-sky-700">すべて選択</button></div><div className="grid sm:grid-cols-2 gap-2">{TOPICS_BY_GRADE[grade].map(topic => <label key={topic.id} className={`p-3 rounded-lg border cursor-pointer ${selected.has(topic.id) ? 'bg-indigo-50 border-indigo-400' : 'bg-white border-slate-200'}`}><input type="checkbox" checked={selected.has(topic.id)} onChange={() => toggle(topic.id)} className="mr-2" />{topic.name}</label>)}</div></section>)}
+        <div className="sticky bottom-2 bg-white border p-4 rounded-xl shadow-xl"><div className="grid grid-cols-2 gap-3 mb-3"><select value={level} onChange={event => setLevel(event.target.value as Difficulty)} className="border rounded p-2"><option>基礎</option><option>標準</option><option>発展</option></select><select value={count} onChange={event => setCount(Number(event.target.value))} className="border rounded p-2"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div><button disabled={selected.size === 0} onClick={() => onStart(courseTopics.filter(({ topic }) => selected.has(topic.id)).map(({ topic }) => topic), count, level)} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg disabled:bg-slate-300">選択した{selected.size}単元で開始</button></div>
+    </div>;
 };
 
 const TopicSelector = ({ topics, onSelectTopic, onBack }: { topics: Topic[], onSelectTopic: (topic: Topic) => void, onBack: () => void }) => (
@@ -596,6 +639,8 @@ const HistoryScreen = ({ history, onBack, onClearHistory }: { history: QuizResul
 
 const ProfileScreen = ({ studentName, updateStudentName, consecutiveDays, onBack }: { studentName: string, updateStudentName: (name: string) => void, consecutiveDays: number, onBack: () => void }) => {
     const [name, setName] = useState(studentName);
+    const [restoreMessage, setRestoreMessage] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
     
     const handleSave = () => {
         updateStudentName(name);
@@ -624,13 +669,28 @@ const ProfileScreen = ({ studentName, updateStudentName, consecutiveDays, onBack
                     />
                 </div>
                 <button onClick={handleSave} className="w-full px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow-md hover:bg-sky-600 transition-colors">保存する</button>
+                <div className="border-t mt-6 pt-5">
+                    <h3 className="font-bold text-slate-700 mb-1">学習データ</h3>
+                    <p className="text-xs text-slate-500 mb-3">端末変更やデータ消失に備えて保存できます。</p>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={downloadBackup} className="px-3 py-2 bg-emerald-600 text-white font-semibold rounded-lg">バックアップ</button>
+                        <button onClick={() => fileInputRef.current?.click()} className="px-3 py-2 bg-slate-600 text-white font-semibold rounded-lg">復元する</button>
+                    </div>
+                    <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={async event => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        try { await restoreBackup(file); setRestoreMessage('復元しました。画面を再読み込みします。'); window.setTimeout(() => window.location.reload(), 800); }
+                        catch (error) { setRestoreMessage(error instanceof Error ? error.message : '復元できませんでした。'); }
+                    }} />
+                    {restoreMessage && <p className="text-sm mt-2 text-slate-700">{restoreMessage}</p>}
+                </div>
             </div>
         </div>
     );
 };
 
 // --- Main App Component ---
-type Screen = 'grade' | 'topic' | 'lesson' | 'difficulty' | 'num_questions' | 'quiz' | 'result' | 'history' | 'profile';
+type Screen = 'grade' | 'topic' | 'lesson' | 'difficulty' | 'num_questions' | 'quiz' | 'result' | 'history' | 'profile' | 'parent' | 'test_builder';
 
 // --- Navigation State Management (useReducer) ---
 type NavState = {
@@ -718,6 +778,15 @@ const App = () => {
         dispatch({ type: 'NAVIGATE', to: 'quiz' });
     };
 
+    const handleStartCustomTest = (topics: Topic[], count: number, level: Difficulty) => {
+        setSelectedGrade(activeProfile.startGrade);
+        setSelectedTopic({ id: 'mixed', name: '範囲指定テスト' });
+        setDifficulty(level);
+        setQuestions(generateTopicMixQuestions(topics, count, level));
+        setQuizStartTime(Date.now());
+        dispatch({ type: 'NAVIGATE', to: 'quiz' });
+    };
+
     const handleQuizComplete = (results: QuestionResult[]) => {
         if (!selectedGrade || !selectedTopic) {
              navigate('grade');
@@ -776,6 +845,8 @@ const App = () => {
         switch(nav.screen) {
             case 'history': return '学習履歴';
             case 'profile': return 'プロフィール';
+            case 'parent': return '保護者向け進捗';
+            case 'test_builder': return '範囲指定テスト';
             default: return `計算トレーニング | ${activeProfile.name}さん`;
         }
     }
@@ -790,7 +861,7 @@ const App = () => {
                         selectProfile(id);
                         resetSelection();
                     }} />
-                    <LearningDashboard grades={availableGrades} history={activeHistory} onMixedTest={() => handleStartMixedTest(availableGrades)} onSelectGrade={handleSelectGrade} onContinue={(grade, topic) => {
+                    <LearningDashboard grades={availableGrades} history={activeHistory} onMixedTest={() => handleStartMixedTest(availableGrades)} onBuildTest={() => navigate('test_builder')} onSelectGrade={handleSelectGrade} onContinue={(grade, topic) => {
                         setSelectedGrade(grade);
                         setSelectedTopic(topic);
                         navigate('lesson');
@@ -825,6 +896,10 @@ const App = () => {
                 return <HistoryScreen history={activeHistory} onBack={() => navigate('grade')} onClearHistory={handleClearHistory} />;
             case 'profile':
                 return <ProfileScreen studentName={activeProfile.name} updateStudentName={updateStudentName} consecutiveDays={consecutiveDays} onBack={() => navigate('grade')} />;
+            case 'parent':
+                return <ParentDashboard grades={GRADES.slice(GRADES.indexOf(activeProfile.startGrade))} history={activeHistory} onBack={() => navigate('grade')} />;
+            case 'test_builder':
+                return <TestBuilder grades={GRADES.slice(GRADES.indexOf(activeProfile.startGrade))} onStart={handleStartCustomTest} onBack={() => navigate('grade')} />;
             default:
                 return <div>Error</div>;
         }
@@ -836,6 +911,7 @@ const App = () => {
                 title={getScreenTitle()} 
                 onHistoryClick={() => navigate('history')} 
                 onProfileClick={() => navigate('profile')}
+                onParentClick={() => navigate('parent')}
                 onHomeClick={() => navigate('grade')}
                 showHomeButton={nav.screen !== 'grade'}
             />
