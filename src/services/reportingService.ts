@@ -106,10 +106,15 @@ export const quizResultToReport = (result: QuizResult): LearningReportRecord => 
 const isValidRecord = (value: unknown): value is LearningReportRecord => {
     if (!value || typeof value !== 'object') return false;
     const record = value as Partial<LearningReportRecord>;
-    return record.version === 1 && typeof record.id === 'string' && typeof record.studentId === 'string' && typeof record.date === 'string'
-        && typeof record.completedAt === 'string' && typeof record.activity === 'string'
-        && typeof record.correct === 'number' && typeof record.total === 'number' && typeof record.durationMinutes === 'number'
-        && Array.isArray(record.strengths) && Array.isArray(record.weaknesses) && typeof record.nextAction === 'string';
+    return record.version === 1 && typeof record.id === 'string' && typeof record.studentId === 'string'
+        && typeof record.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.date)
+        && typeof record.completedAt === 'string' && Number.isFinite(Date.parse(record.completedAt)) && typeof record.activity === 'string'
+        && typeof record.correct === 'number' && Number.isFinite(record.correct) && record.correct >= 0
+        && typeof record.total === 'number' && Number.isFinite(record.total) && record.total >= record.correct
+        && typeof record.durationMinutes === 'number' && Number.isFinite(record.durationMinutes) && record.durationMinutes >= 0
+        && Array.isArray(record.strengths) && record.strengths.every(item => typeof item === 'string')
+        && Array.isArray(record.weaknesses) && record.weaknesses.every(item => typeof item === 'string')
+        && typeof record.nextAction === 'string';
 };
 
 export const readReportStore = (storage: Pick<Storage, 'getItem'> = localStorage): LearningReportRecord[] => {
@@ -220,8 +225,9 @@ export const copyText = async (text: string): Promise<boolean> => {
     } catch {
         // Fall through to the Android-compatible selection copy.
     }
+    let textarea: HTMLTextAreaElement | null = null;
     try {
-        const textarea = document.createElement('textarea');
+        textarea = document.createElement('textarea');
         textarea.value = text;
         textarea.setAttribute('readonly', '');
         textarea.style.position = 'fixed';
@@ -231,9 +237,10 @@ export const copyText = async (text: string): Promise<boolean> => {
         textarea.select();
         textarea.setSelectionRange(0, textarea.value.length);
         const copied = typeof document.execCommand === 'function' && document.execCommand('copy');
-        document.body.removeChild(textarea);
         return copied;
     } catch {
         return false;
+    } finally {
+        textarea?.remove();
     }
 };

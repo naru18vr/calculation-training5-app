@@ -60,7 +60,7 @@ const Header = ({ title, onHistoryClick, onProfileClick, onParentClick, onHomeCl
 
 const Footer = () => (
     <footer className="text-center py-4 text-slate-500 text-sm">
-        <p>&copy; 2024 計算トレーニング. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} 数学・計算トレーニング</p>
     </footer>
 );
 
@@ -187,7 +187,7 @@ const CopyReportPanel = ({ text, label }: { text: string; label: string }) => {
     return <div className="w-full min-w-0">
         <button onClick={copy} className="min-h-12 w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white text-base font-bold rounded-lg shadow-md whitespace-normal">{label}</button>
         {copyState === 'success' && <p role="status" className="mt-2 text-sm font-semibold text-emerald-800">✓ コピーできました。Google Chatに貼って送ってね。</p>}
-        {copyState === 'error' && <div role="alert" className="mt-3"><p className="text-sm font-semibold text-rose-800 mb-2">⚠ コピーできませんでした。下の文章を長押しして選択し、手動でコピーしてください。</p><textarea readOnly value={text} onFocus={event => event.currentTarget.select()} className="w-full min-h-48 p-3 text-base border-2 border-rose-300 rounded-lg bg-white resize-y break-words" /></div>}
+        {copyState === 'error' && <div role="alert" className="mt-3"><p className="text-sm font-semibold text-rose-800 mb-2">⚠ コピーできませんでした。下の文章を長押しして選択し、手動でコピーしてください。</p><textarea aria-label="手動コピー用の報告文" readOnly value={text} onFocus={event => event.currentTarget.select()} className="w-full min-h-48 p-3 text-base border-2 border-rose-300 rounded-lg bg-white resize-y break-words" /></div>}
     </div>;
 };
 
@@ -223,7 +223,7 @@ const TestBuilder = ({ grades, reviewGrade, onStart, onBack }: { grades: Grade[]
     const toggle = (id: string) => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
     return <div className="p-4 sm:p-6"><BackButton onClick={onBack}>トップに戻る</BackButton><h2 className="text-2xl font-bold mb-2">範囲指定テスト</h2><p className="text-sm text-slate-500 mb-5">出題したい単元を1つ以上選んでください。</p>
         {grades.map(grade => <section key={grade} className="mb-5"><div className="flex justify-between mb-2"><h3 className="font-bold">{grade}{grade === reviewGrade && <span className="ml-2 text-xs text-amber-700 bg-amber-100 px-2 py-1 rounded-full">おさらい</span>}</h3><button onClick={() => setSelected(current => { const next = new Set(current); TOPICS_BY_GRADE[grade].forEach(topic => next.add(topic.id)); return next; })} className="text-sm text-sky-700">すべて選択</button></div><div className="grid sm:grid-cols-2 gap-2">{TOPICS_BY_GRADE[grade].map(topic => <label key={topic.id} className={`p-3 rounded-lg border cursor-pointer ${selected.has(topic.id) ? 'bg-indigo-50 border-indigo-400' : 'bg-white border-slate-200'}`}><input type="checkbox" checked={selected.has(topic.id)} onChange={() => toggle(topic.id)} className="mr-2" />{topic.name}</label>)}</div></section>)}
-        <div className="sticky bottom-2 bg-white border p-4 rounded-xl shadow-xl"><div className="grid grid-cols-2 gap-3 mb-3"><select value={level} onChange={event => setLevel(event.target.value as Difficulty)} className="border rounded p-2"><option>基礎</option><option>標準</option><option>発展</option></select><select value={count} onChange={event => setCount(Number(event.target.value))} className="border rounded p-2"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div><button disabled={selected.size === 0} onClick={() => onStart(courseTopics.filter(({ topic }) => selected.has(topic.id)).map(({ topic }) => topic), count, level)} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg disabled:bg-slate-300">選択した{selected.size}単元で開始</button></div>
+        <div className="sticky bottom-2 bg-white border p-4 rounded-xl shadow-xl"><div className="grid grid-cols-2 gap-3 mb-3"><select aria-label="難易度" value={level} onChange={event => setLevel(event.target.value as Difficulty)} className="min-h-12 border rounded p-2"><option>基礎</option><option>標準</option><option>発展</option></select><select aria-label="問題数" value={count} onChange={event => setCount(Number(event.target.value))} className="min-h-12 border rounded p-2"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div><button disabled={selected.size === 0} onClick={() => onStart(courseTopics.filter(({ topic }) => selected.has(topic.id)).map(({ topic }) => topic), count, level)} className="min-h-12 w-full py-3 bg-indigo-600 text-white font-bold rounded-lg disabled:bg-slate-300">選択した{selected.size}単元で開始</button></div>
     </div>;
 };
 
@@ -313,7 +313,7 @@ const Keypad = ({ onKeyPress }: { onKeyPress: (key: string) => void }) => {
     ];
 
     return (
-        <div className="grid grid-cols-7 gap-2 p-2 bg-slate-200 rounded-lg mt-4">
+        <div className="grid grid-cols-5 gap-2 p-2 bg-slate-200 rounded-lg mt-4">
             {keys.map(key => {
                  const isOk = key === 'OK';
                  const isBackspace = key === '⌫';
@@ -324,7 +324,8 @@ const Keypad = ({ onKeyPress }: { onKeyPress: (key: string) => void }) => {
                     <button
                         key={key}
                         onClick={() => onKeyPress(key)}
-                        className={`h-12 rounded-lg text-xl font-bold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 shadow-md active:shadow-inner active:translate-y-px
+                        aria-label={key === '⌫' ? '1文字消す' : key === 'OK' ? '答え合わせ' : key}
+                        className={`min-h-12 min-w-0 rounded-lg text-xl font-bold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 shadow-md active:shadow-inner active:translate-y-px
                             ${isOk ? 'col-span-2 bg-sky-500 text-white hover:bg-sky-600' : ''}
                             ${isBackspace ? 'bg-rose-500 text-white hover:bg-rose-600' : ''}
                             ${isSymbol ? 'bg-slate-100 text-slate-800' : ''}
@@ -453,7 +454,7 @@ const Quiz = ({
     return (
         <div className="p-4 sm:p-6">
             <div className="mb-6">
-                <button onClick={onBack} className="inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
+                <button onClick={onBack} className="min-h-12 inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                      問題数選択に戻る
                 </button>
@@ -501,6 +502,9 @@ const Quiz = ({
                         aria-label="解答入力欄"
                         className="w-full p-4 text-lg border-2 border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 text-center"
                     />
+                </div>
+                <div aria-live="polite" className="min-h-6 mt-1 text-center text-sm font-semibold">
+                    {isWrong && !showExplanation && <span className="text-rose-700">✕ ちがいます。あと{MAX_ATTEMPTS - attempts - 1}回ためせます。</span>}
                 </div>
                 {inputMode === 'keypad' && <Keypad onKeyPress={handleKeypadPress} />}
                  {inputMode === 'keyboard' && (
@@ -688,6 +692,12 @@ const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyG
         setSaveMessage('✓ 名前を保存しました。');
     };
 
+    const handleBackup = () => {
+        setRestoreMessage(downloadBackup()
+            ? '✓ バックアップを保存しました。ダウンロードフォルダを確認してください。'
+            : '⚠ バックアップを保存できませんでした。ブラウザーのダウンロード許可を確認してください。');
+    };
+
     return (
         <div className="p-4 sm:p-6">
             <BackButton onClick={onBack}>トップに戻る</BackButton>
@@ -711,15 +721,15 @@ const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyG
                 </div>
                 <button onClick={handleSave} className="min-h-12 w-full px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow-md hover:bg-sky-600 transition-colors">保存する</button>
                 {saveMessage && <p role="status" className="mt-2 text-sm font-semibold text-emerald-700">{saveMessage}</p>}
-                <div className="mt-5"><label htmlFor="dailyGoal" className="block text-sm font-medium text-slate-700 mb-1">1日の目標問題数</label><select id="dailyGoal" value={dailyGoal} onChange={event => updateDailyGoal(Number(event.target.value))} className="w-full p-2 border border-slate-300 rounded-md"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div>
-                <div className="border-t mt-6 pt-5"><h3 className="font-bold text-slate-700 mb-1">試験の目標（任意）</h3><p className="text-xs text-slate-500 mb-3">週間報告に残り日数と目標到達状況を表示します。</p><label htmlFor="examDate" className="block text-sm mb-1">試験日</label><input id="examDate" type="date" value={localExamDate} onChange={event => setLocalExamDate(event.target.value)} className="w-full p-2 border rounded-md mb-3" /><label htmlFor="targetScore" className="block text-sm mb-1">目標正答率</label><select id="targetScore" value={localTargetScore} onChange={event => setLocalTargetScore(Number(event.target.value))} className="w-full p-2 border rounded-md mb-3"><option value={60}>60%</option><option value={70}>70%</option><option value={80}>80%</option><option value={90}>90%</option></select><button onClick={() => updateExamSettings(localExamDate, localTargetScore)} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg">試験目標を保存</button></div>
+                <div className="mt-5"><label htmlFor="dailyGoal" className="block text-sm font-medium text-slate-700 mb-1">1日の目標問題数</label><select id="dailyGoal" value={dailyGoal} onChange={event => { updateDailyGoal(Number(event.target.value)); setSaveMessage('✓ 1日の目標を保存しました。'); }} className="min-h-12 w-full p-2 border border-slate-300 rounded-md"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div>
+                <div className="border-t mt-6 pt-5"><h3 className="font-bold text-slate-700 mb-1">試験の目標（任意）</h3><p className="text-xs text-slate-500 mb-3">週間報告に残り日数と目標到達状況を表示します。</p><label htmlFor="examDate" className="block text-sm mb-1">試験日</label><input id="examDate" type="date" value={localExamDate} onChange={event => setLocalExamDate(event.target.value)} className="min-h-12 w-full p-2 border rounded-md mb-3" /><label htmlFor="targetScore" className="block text-sm mb-1">目標正答率</label><select id="targetScore" value={localTargetScore} onChange={event => setLocalTargetScore(Number(event.target.value))} className="min-h-12 w-full p-2 border rounded-md mb-3"><option value={60}>60%</option><option value={70}>70%</option><option value={80}>80%</option><option value={90}>90%</option></select><button onClick={() => { updateExamSettings(localExamDate, localTargetScore); setSaveMessage('✓ 試験目標を保存しました。'); }} className="min-h-12 w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg">試験目標を保存</button></div>
                 <div className="border-t mt-6 pt-5">
                     <h3 className="font-bold text-slate-700 mb-1">学習データ</h3>
                     <p className="text-xs text-slate-500 mb-3">端末変更やデータ消失に備えて保存できます。</p>
                     <p className="text-xs text-amber-700 mb-3">バックアップには学習記録が含まれます。公開場所へ貼らないでください。</p>
                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={downloadBackup} className="px-3 py-2 bg-emerald-600 text-white font-semibold rounded-lg">バックアップ</button>
-                        <button onClick={() => fileInputRef.current?.click()} className="px-3 py-2 bg-slate-600 text-white font-semibold rounded-lg">復元する</button>
+                        <button onClick={handleBackup} className="min-h-12 px-3 py-2 bg-emerald-600 text-white font-semibold rounded-lg">バックアップ</button>
+                        <button onClick={() => fileInputRef.current?.click()} className="min-h-12 px-3 py-2 bg-slate-600 text-white font-semibold rounded-lg">復元する</button>
                     </div>
                     <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={async event => {
                         const file = event.target.files?.[0];
@@ -727,7 +737,7 @@ const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyG
                         try { await restoreBackup(file); setRestoreMessage('復元しました。画面を再読み込みします。'); window.setTimeout(() => window.location.reload(), 800); }
                         catch (error) { setRestoreMessage(error instanceof Error ? error.message : '復元できませんでした。'); }
                     }} />
-                    {restoreMessage && <p className="text-sm mt-2 text-slate-700">{restoreMessage}</p>}
+                    {restoreMessage && <p role="status" aria-live="polite" className="text-sm mt-2 text-slate-700">{restoreMessage}</p>}
                 </div>
             </div>
         </div>
@@ -948,6 +958,7 @@ const App = () => {
 
     return (
         <div className="min-h-screen flex flex-col">
+            <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:font-bold focus:text-sky-700 focus:shadow-lg">本文へ移動</a>
             <Header 
                 title={getScreenTitle()} 
                 onHistoryClick={() => navigate('history')} 
@@ -956,7 +967,7 @@ const App = () => {
                 onHomeClick={() => navigate('grade')}
                 showHomeButton={nav.screen !== 'grade'}
             />
-            <main className="flex-grow container mx-auto max-w-4xl">
+            <main id="main-content" className="flex-grow container mx-auto max-w-4xl" tabIndex={-1}>
                  <div className="bg-slate-50 rounded-lg shadow-inner m-2 sm:m-4">
                     {renderScreen()}
                 </div>

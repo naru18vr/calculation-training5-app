@@ -63,20 +63,28 @@ export const restoreBackupData = (backup: BackupData, storage: BackupStorage = l
     }
 };
 
-export const downloadBackup = () => {
-    const backup: BackupData = {
-        app: 'calculation-training5-app',
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        data: Object.fromEntries(BACKUP_KEYS.map(key => [key, localStorage.getItem(key)])),
-    };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `math-training-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+export const downloadBackup = (): boolean => {
+    let url = '';
+    try {
+        const backup: BackupData = {
+            app: 'calculation-training5-app',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            data: Object.fromEntries(BACKUP_KEYS.map(key => [key, localStorage.getItem(key)])),
+        };
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `math-training-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        anchor.click();
+        return true;
+    } catch (error) {
+        console.error('Backup download failed:', error);
+        return false;
+    } finally {
+        if (url) URL.revokeObjectURL(url);
+    }
 };
 
 export const restoreBackup = async (file: File) => {
