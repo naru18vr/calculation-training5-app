@@ -27,3 +27,24 @@ export const primeFactorize = (num: number): Record<number, number> => {
 };
 
 export const formatNum = (n: number) => n < 0 ? `(${n})` : `${n}`;
+
+export const shuffle = <T>(items: readonly T[]): T[] => {
+    const shuffled = [...items];
+    for (let index = shuffled.length - 1; index > 0; index--) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+};
+
+export interface MathTextPart {
+    text: string;
+    superscript: boolean;
+}
+
+export const splitMathText = (text: string): MathTextPart[] => text
+    .split(/(\^-?\d+)/g)
+    .filter(Boolean)
+    .map(part => part.startsWith('^')
+        ? { text: part.slice(1), superscript: true }
+        : { text: part, superscript: false });

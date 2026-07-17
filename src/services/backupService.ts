@@ -5,12 +5,63 @@ const BACKUP_KEYS = [
     'calculation-training-reports-v1',
 ] as const;
 
-interface BackupData {
+export interface BackupData {
     app: 'calculation-training5-app';
     version: 1;
     exportedAt: string;
     data: Record<string, string | null>;
 }
+
+type BackupStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+const JSON_KEYS = new Set<string>([
+    'calculation-training-history',
+    'calculation-training-student-profiles-v2',
+    'calculation-training-reports-v1',
+]);
+
+export const validateBackupData = (value: unknown): BackupData => {
+    if (!value || typeof value !== 'object') throw new Error('バックアップファイルを読み取れません。');
+    const parsed = value as Partial<BackupData>;
+    if (parsed.app !== 'calculation-training5-app' || parsed.version !== 1 || !parsed.data || typeof parsed.data !== 'object') {
+        throw new Error('このアプリのバックアップファイルではありません。');
+    }
+    for (const key of BACKUP_KEYS) {
+        const item = parsed.data[key];
+        if (item !== null && typeof item !== 'string') throw new Error('バックアップの保存データが壊れています。');
+        if (typeof item === 'string' && JSON_KEYS.has(key)) {
+            try {
+                JSON.parse(item);
+            } catch {
+                throw new Error('バックアップの保存データが壊れています。');
+            }
+        }
+    }
+    return parsed as BackupData;
+};
+
+export const restoreBackupData = (backup: BackupData, storage: BackupStorage = localStorage) => {
+    const previous = Object.fromEntries(BACKUP_KEYS.map(key => [key, storage.getItem(key)])) as Record<string, string | null>;
+    try {
+        BACKUP_KEYS.forEach(key => {
+            const value = backup.data[key];
+            if (typeof value === 'string') storage.setItem(key, value);
+            else storage.removeItem(key);
+        });
+    } catch (error) {
+        BACKUP_KEYS.forEach(key => {
+            try {
+                const value = previous[key];
+                if (typeof value === 'string') storage.setItem(key, value);
+                else storage.removeItem(key);
+            } catch {
+                // Continue rolling back other keys even when storage is unavailable.
+            }
+        });
+        console.error('Backup restore failed and was rolled back:', error);
+        throw new Error('復元できませんでした。元の学習記録は変更していません。');
+    }
+};
 
 export const downloadBackup = () => {
     const backup: BackupData = {
@@ -29,13 +80,11 @@ export const downloadBackup = () => {
 };
 
 export const restoreBackup = async (file: File) => {
-    const parsed = JSON.parse(await file.text()) as Partial<BackupData>;
-    if (parsed.app !== 'calculation-training5-app' || parsed.version !== 1 || !parsed.data) {
-        throw new Error('このアプリのバックアップファイルではありません。');
+    let raw: unknown;
+    try {
+        raw = JSON.parse(await file.text());
+    } catch {
+        throw new Error('バックアップファイルを読み取れません。');
     }
-    BACKUP_KEYS.forEach(key => {
-        const value = parsed.data?.[key];
-        if (typeof value === 'string') localStorage.setItem(key, value);
-        else localStorage.removeItem(key);
-    });
+    restoreBackupData(validateBackupData(raw));
 };
