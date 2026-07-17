@@ -7,6 +7,7 @@ import { generateM1Question } from './middle1';
 import { generateM2Question } from './middle2';
 import { generateM3Question } from './middle3';
 import { generateSupplementalQuestion, SUPPLEMENTAL_TOPIC_IDS } from './supplemental';
+import { shuffle } from './utils';
 
 
 const generateQuestion = (topic: Topic, index: number, difficulty: Difficulty | null): Question => {
@@ -52,10 +53,12 @@ export const generateMixedQuestions = (grades: Grade[], numQuestions: number, di
 export const generateTopicMixQuestions = (topics: Topic[], numQuestions: number, difficulty: Difficulty): Question[] => {
   if (topics.length === 0) return [];
 
-  return Array.from({ length: numQuestions }, (_, index) => {
-    const topic = topics[index % topics.length];
+  const topicOrder = shuffle(topics);
+  const questions = Array.from({ length: numQuestions }, (_, index) => {
+    const topic = topicOrder[index % topicOrder.length];
     return generateQuestion(topic, index, difficulty);
-  }).sort(() => Math.random() - 0.5).map((question, index) => ({ ...question, id: index }));
+  });
+  return shuffle(questions).map((question, index) => ({ ...question, id: index }));
 };
 
 export const generateQuestions = (topic: Topic, numQuestions: number, difficulty: Difficulty | null): Question[] => {

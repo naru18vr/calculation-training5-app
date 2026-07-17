@@ -11,6 +11,8 @@ import { downloadBackup, restoreBackup } from './services/backupService';
 import { downloadHistoryCsv } from './services/reportService';
 import { buildDailyReportText, buildWeeklyReportText, copyText, getWeeklySummary, mergeCompatibleReports, quizResultToReport, readReportStore, saveReportRecord } from './services/reportingService';
 import type { LearningReportRecord } from './services/reportingService';
+import { safeStorageSet } from './services/profileService';
+import { splitMathText } from './services/utils';
 
 const HISTORY_KEY = 'calculation-training-history';
 
@@ -467,7 +469,11 @@ const Quiz = ({
 
             <div className="bg-white p-6 rounded-lg shadow-lg min-h-[120px] flex items-center justify-center text-center">
                 <div>
-                  <p className="text-2xl sm:text-3xl font-mono text-slate-800" dangerouslySetInnerHTML={{ __html: currentQuestion.text.replace(/\^(\d+)/g, '<sup>$1</sup>') }}/>
+                  <p className="text-2xl sm:text-3xl font-mono text-slate-800">
+                    {splitMathText(currentQuestion.text).map((part, index) => part.superscript
+                        ? <sup key={index}>{part.text}</sup>
+                        : <React.Fragment key={index}>{part.text}</React.Fragment>)}
+                  </p>
                   {currentQuestion.figure && <div className="mt-4 flex justify-center">{currentQuestion.figure}</div>}
                 </div>
             </div>
@@ -865,7 +871,7 @@ const App = () => {
         if(window.confirm(`${activeProfile.name}さんの学習履歴をすべて削除しますか？`)) {
             setHistory(current => {
                 const remaining = current.filter(result => (result.studentId ?? 'grade5') !== activeProfile.id);
-                localStorage.setItem(HISTORY_KEY, JSON.stringify(remaining));
+                safeStorageSet(HISTORY_KEY, JSON.stringify(remaining));
                 return remaining;
             });
         }

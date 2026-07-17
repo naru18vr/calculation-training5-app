@@ -7,9 +7,9 @@ const topics = Object.values(TOPICS_BY_GRADE).flat();
 const difficulties = DIFFICULTY_LEVELS.map(level => level.id);
 
 const assertValidQuestion = (topic: Topic, difficulty: Difficulty) => {
-    const questions = generateQuestions(topic, 25, difficulty);
+    const questions = generateQuestions(topic, 100, difficulty);
 
-    expect(questions, `${topic.id} (${difficulty})`).toHaveLength(25);
+    expect(questions, `${topic.id} (${difficulty})`).toHaveLength(100);
     questions.forEach((question, index) => {
         expect(question.id).toBe(index);
         expect(question.text.trim()).not.toBe('');
