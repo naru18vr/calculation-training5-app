@@ -1,59 +1,33 @@
-# 計算トレーニングアプリ (Calculation Training App)
+# 計算トレーニング5
 
-An interactive web application for students in Japan to practice and improve their math calculation skills, from elementary to junior high school levels. Users can select their grade, choose a specific math topic, and take a quiz. The app provides instant feedback, tracks results, and keeps a history of performance.
+小学校5年生または中学校2年生から、中学校3年生までの数学を継続して学ぶためのWebアプリです。
 
----
+## 主な機能
 
-## ✅ GitHub Pages 公開前の最終確認リスト
+- 小5コース（小5〜中3）と中2コース（中2〜中3）
+- 学習者ごとに分離された名前、履歴、連続学習日数
+- 72単元、基礎・標準・発展の3段階
+- 単元ごとの要点、解法ポイント、例題
+- 今日のおすすめ学習
+- 単元別習熟度と苦手単元の自動推薦
+- 20問の総合テスト
+- 間違えた問題の解説付き振り返り
+- 全角入力、単位、同値分数などに対応した解答判定
+- GitHub Pagesへの自動デプロイ
 
-### 1. ビルド設定まわり
+学習履歴はブラウザの`localStorage`に保存されます。従来形式の履歴は小5プロフィールへ引き継がれます。
 
-* [ ] **vite.config.ts**
-  `base: process.env.BASE_PATH ?? '/'` になっているか
-  （＝Workflowから自動注入される）
+## 開発
 
-* [ ] **GitHub Actions（deploy.yml）**
-  `BASE_PATH: "/${{ github.event.repository.name }}/"` が `Build` ステップに設定されているか
+```bash
+npm ci
+npm run dev
+```
 
-* [ ] **package.json scripts**
-  `dev` = `"vite"`, `build` = `"vite build"` になっているか（`gh-pages` は不要）
+## 品質確認
 
----
+```bash
+npm run check
+```
 
-### 2. CSS/Tailwind
-
-* [ ] **src/main.tsx** で `import './index.css'` が読み込まれているか
-* [ ] **tailwind.config.js** →
-  `content: ['./index.html', './src/**/*.{ts,tsx}']` になっているか
-* [ ] **index.css** が `@tailwind base; @tailwind components; @tailwind utilities;` だけになっているか
-* [ ] Google Fonts を使うなら、`index.html` の `<head>` に `<link>` で入れているか（`@import` はNG）
-
----
-
-### 3. アセットまわり
-
-* [ ] 画像・アイコンが **絶対パス `/assets/...` ではなく相対 import** になっているか
-
-  ```ts
-  import logo from './assets/logo.png'
-  // or
-  const url = new URL('./assets/logo.png', import.meta.url).href
-  ```
-* [ ] Favicon も相対パス指定になっているか（例：`<link rel="icon" href="./favicon.ico">`）
-
----
-
-### 4. React/TypeScript
-
-* [ ] `src/index.tsx` は削除済みで、**`src/main.tsx` が唯一のエントリ**になっているか
-* [ ] `tsconfig.json` に `jsx: "react-jsx"` が入っているか
-* [ ] SVGをTSXで書く場合、属性はキャメルケース（例：`strokeWidth`, `viewBox`, `textAnchor`）
-
----
-
-### 5. GitHub Pages デプロイ後チェック
-
-* [ ] Actions に **“Deploy to GitHub Pages”** が緑で完了しているか
-* [ ] Settings → Pages → 公開URLが出ているか
-* [ ] 公開URLでJS/CSSが 404 になっていないか（＝`/<リポ名>/assets/...` で取れている）
-* [ ] ブラウザコンソールに赤エラーが出ていないか
+`npm run check`は、全単元・全難易度の問題生成テスト、解答判定テスト、TypeScript型検査、本番ビルドを実行します。
