@@ -284,13 +284,15 @@ export const generateM3Question = (topic: Topic, difficulty: Difficulty): Omit<Q
             const x2_num = -b - sqrtD;
             const [s1_num, s1_den] = simplifyFraction(x1_num, den);
             const [s2_num, s2_den] = simplifyFraction(x2_num, den);
-            const r1 = s1_den === 1 ? s1_num.toString() : `${s1_num}/${s1_den}`;
-            const r2 = s2_den === 1 ? s2_num.toString() : `${s2_num}/${s2_den}`;
-            const roots = [parseFloat(eval(r1)), parseFloat(eval(r2))].sort((n1,n2) => n1-n2);
-            const finalRoots = roots.map(r => {
-                const [n,d] = simplifyFraction(Math.round(r*100), 100); // Handle potential floating point issues
-                return d===1 ? n.toString() : `${n}/${d}`;
-            });
+            const roots = [
+                { numerator: s1_num, denominator: s1_den },
+                { numerator: s2_num, denominator: s2_den },
+            ].sort((first, second) =>
+                first.numerator * second.denominator - second.numerator * first.denominator,
+            );
+            const finalRoots = roots.map(({ numerator, denominator }) =>
+                denominator === 1 ? numerator.toString() : `${numerator}/${denominator}`,
+            );
             answer = `x=${finalRoots.join(',')}`;
             explanation = `解の公式 x = (-b ± √(b²-4ac))/2a を使います。答えは ${answer} です。`;
         }
