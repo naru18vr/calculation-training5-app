@@ -8,6 +8,7 @@ import { useStudentProfile } from './hooks/useStudentProfile';
 import { getCourseTopics, getLessonContent, getRecommendedTopic, getTopicProgress, getWeakTopics } from './services/learningService';
 import { isAnswerCorrect } from './services/answerService';
 import { downloadBackup, restoreBackup } from './services/backupService';
+import { downloadHistoryCsv } from './services/reportService';
 
 const HISTORY_KEY = 'calculation-training-history';
 
@@ -91,22 +92,32 @@ const LearnerSelector = ({ profiles, activeProfile, onSelect }: {
     </div>
 );
 
-const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixedTest, onBuildTest }: {
+const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixedTest, onBuildTest, dailyGoal }: {
     grades: Grade[];
     history: QuizResult[];
     onContinue: (grade: Grade, topic: Topic) => void;
     onSelectGrade: (grade: Grade) => void;
     onMixedTest: () => void;
     onBuildTest: () => void;
+    dailyGoal: number;
 }) => {
     const courseTopics = getCourseTopics(grades);
     const recommended = getRecommendedTopic(history, grades);
     const weakTopics = getWeakTopics(history, grades);
     const mastered = courseTopics.filter(({ topic }) => getTopicProgress(history, topic.id).mastery >= 80).length;
     const progress = courseTopics.length === 0 ? 0 : Math.round((mastered / courseTopics.length) * 100);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const answeredToday = history.filter(session => session.endTime >= today.getTime()).reduce((sum, session) => sum + session.results.length, 0);
+    const dailyProgress = Math.min(100, Math.round(answeredToday / dailyGoal * 100));
 
     return (
         <div className="p-4 sm:p-6 space-y-5">
+            <section className="bg-white p-4 rounded-xl shadow-md">
+                <div className="flex justify-between mb-2"><span className="font-bold text-slate-700">今日の目標</span><span className="font-bold text-sky-700">{answeredToday} / {dailyGoal}問</span></div>
+                <div className="h-3 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full ${dailyProgress >= 100 ? 'bg-amber-500' : 'bg-sky-500'}`} style={{ width: `${dailyProgress}%` }} /></div>
+                {dailyProgress >= 100 && <p className="text-sm text-amber-700 font-bold mt-2">今日の目標達成！</p>}
+            </section>
             <section className="bg-gradient-to-br from-sky-500 to-indigo-600 text-white p-5 rounded-xl shadow-lg">
                 <p className="text-sm text-sky-100">今日のおすすめ</p>
                 <h2 className="text-xl font-bold mt-1">{recommended?.topic.name ?? 'コースを準備中'}</h2>
@@ -164,7 +175,7 @@ const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixed
     );
 };
 
-const ParentDashboard = ({ grades, history, onBack }: { grades: Grade[]; history: QuizResult[]; onBack: () => void }) => {
+const ParentDashboard = ({ grades, history, learnerName, onBack }: { grades: Grade[]; history: QuizResult[]; learnerName: string; onBack: () => void }) => {
     const topics = getCourseTopics(grades);
     const weakTopics = getWeakTopics(history, grades, 5);
     const totalAnswered = history.reduce((sum, session) => sum + session.results.length, 0);
@@ -175,7 +186,7 @@ const ParentDashboard = ({ grades, history, onBack }: { grades: Grade[]; history
 
     return <div className="p-4 sm:p-6">
         <BackButton onClick={onBack}>トップに戻る</BackButton>
-        <h2 className="text-2xl font-bold text-slate-800 mb-5">保護者向け進捗</h2>
+        <div className="flex justify-between items-center mb-5"><h2 className="text-2xl font-bold text-slate-800">保護者向け進捗</h2><button disabled={history.length === 0} onClick={() => downloadHistoryCsv(history, learnerName)} className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg disabled:bg-slate-300">CSV出力</button></div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             {[['学習回数', `${history.length}回`], ['学習時間', `${totalMinutes}分`], ['正答率', `${accuracy}%`], ['習得単元', `${mastered}/${topics.length}`]].map(([label, value]) => <div key={label} className="bg-white p-4 rounded-lg shadow"><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-bold text-slate-800">{value}</p></div>)}
         </div>
@@ -494,7 +505,7 @@ const Quiz = ({
     );
 };
 
-const ResultsScreen = ({ result, onRetry, onBackToTop }: { result: QuizResult, onRetry: () => void, onBackToTop: () => void }) => {
+const ResultsScreen = ({ result, onRetry, onRetryWrong, onBackToTop }: { result: QuizResult, onRetry: () => void, onRetryWrong: () => void, onBackToTop: () => void }) => {
     const { results, startTime, endTime, grade, topic, difficulty } = result;
     const totalQuestions = results.length;
     
@@ -560,6 +571,7 @@ const ResultsScreen = ({ result, onRetry, onBackToTop }: { result: QuizResult, o
             )}
 
             <div className="space-y-4 sm:space-y-0 sm:flex sm:space-x-4 justify-center">
+                {incorrectAnswers.length > 0 && <button onClick={onRetryWrong} className="w-full sm:w-auto px-8 py-3 bg-rose-500 text-white font-bold rounded-lg shadow-md hover:bg-rose-600">間違えた問題だけ再挑戦</button>}
                 <button onClick={onRetry} className="w-full sm:w-auto px-8 py-3 bg-sky-500 text-white font-bold rounded-lg shadow-md hover:bg-sky-600 transition-all transform hover:-translate-y-0.5 active:translate-y-0">もう一度挑戦</button>
                 <button onClick={onBackToTop} className="w-full sm:w-auto px-8 py-3 bg-slate-600 text-white font-bold rounded-lg shadow-md hover:bg-slate-700 transition-all transform hover:-translate-y-0.5 active:translate-y-0">トップに戻る</button>
             </div>
@@ -637,7 +649,7 @@ const HistoryScreen = ({ history, onBack, onClearHistory }: { history: QuizResul
 };
 
 
-const ProfileScreen = ({ studentName, updateStudentName, consecutiveDays, onBack }: { studentName: string, updateStudentName: (name: string) => void, consecutiveDays: number, onBack: () => void }) => {
+const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyGoal, consecutiveDays, onBack }: { studentName: string, updateStudentName: (name: string) => void, dailyGoal: number, updateDailyGoal: (goal: number) => void, consecutiveDays: number, onBack: () => void }) => {
     const [name, setName] = useState(studentName);
     const [restoreMessage, setRestoreMessage] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -669,6 +681,7 @@ const ProfileScreen = ({ studentName, updateStudentName, consecutiveDays, onBack
                     />
                 </div>
                 <button onClick={handleSave} className="w-full px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow-md hover:bg-sky-600 transition-colors">保存する</button>
+                <div className="mt-5"><label htmlFor="dailyGoal" className="block text-sm font-medium text-slate-700 mb-1">1日の目標問題数</label><select id="dailyGoal" value={dailyGoal} onChange={event => updateDailyGoal(Number(event.target.value))} className="w-full p-2 border border-slate-300 rounded-md"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div>
                 <div className="border-t mt-6 pt-5">
                     <h3 className="font-bold text-slate-700 mb-1">学習データ</h3>
                     <p className="text-xs text-slate-500 mb-3">端末変更やデータ消失に備えて保存できます。</p>
@@ -724,7 +737,7 @@ const App = () => {
     const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
     const [quizStartTime, setQuizStartTime] = useState<number>(0);
     const [history, setHistory] = useState<QuizResult[]>([]);
-    const { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, consecutiveDays } = useStudentProfile(history);
+    const { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, updateDailyGoal, consecutiveDays } = useStudentProfile(history);
 
     useEffect(() => {
         try {
@@ -841,6 +854,15 @@ const App = () => {
         dispatch({ type: 'NAVIGATE', to: 'quiz' });
     };
 
+    const handleRetryWrong = () => {
+        if (!quizResult) return;
+        const wrongQuestions = quizResult.results.filter(result => !result.isCorrect).map((result, index) => ({ ...result.question, id: index }));
+        if (wrongQuestions.length === 0) return;
+        setQuestions(wrongQuestions);
+        setQuizStartTime(Date.now());
+        dispatch({ type: 'NAVIGATE', to: 'quiz' });
+    };
+
     const getScreenTitle = () => {
         switch(nav.screen) {
             case 'history': return '学習履歴';
@@ -861,7 +883,7 @@ const App = () => {
                         selectProfile(id);
                         resetSelection();
                     }} />
-                    <LearningDashboard grades={availableGrades} history={activeHistory} onMixedTest={() => handleStartMixedTest(availableGrades)} onBuildTest={() => navigate('test_builder')} onSelectGrade={handleSelectGrade} onContinue={(grade, topic) => {
+                    <LearningDashboard grades={availableGrades} history={activeHistory} dailyGoal={activeProfile.dailyGoal} onMixedTest={() => handleStartMixedTest(availableGrades)} onBuildTest={() => navigate('test_builder')} onSelectGrade={handleSelectGrade} onContinue={(grade, topic) => {
                         setSelectedGrade(grade);
                         setSelectedTopic(topic);
                         navigate('lesson');
@@ -891,13 +913,13 @@ const App = () => {
             case 'quiz':
                 return questions.length > 0 && selectedTopic ? <Quiz questions={questions} onQuizComplete={handleQuizComplete} topicName={selectedTopic.name} onBack={() => navigate('num_questions')} /> : <div>Loading...</div>;
             case 'result':
-                return quizResult && <ResultsScreen result={quizResult} onRetry={handleRetry} onBackToTop={() => navigate('grade')} />;
+                return quizResult && <ResultsScreen result={quizResult} onRetry={handleRetry} onRetryWrong={handleRetryWrong} onBackToTop={() => navigate('grade')} />;
             case 'history':
                 return <HistoryScreen history={activeHistory} onBack={() => navigate('grade')} onClearHistory={handleClearHistory} />;
             case 'profile':
-                return <ProfileScreen studentName={activeProfile.name} updateStudentName={updateStudentName} consecutiveDays={consecutiveDays} onBack={() => navigate('grade')} />;
+                return <ProfileScreen studentName={activeProfile.name} updateStudentName={updateStudentName} dailyGoal={activeProfile.dailyGoal} updateDailyGoal={updateDailyGoal} consecutiveDays={consecutiveDays} onBack={() => navigate('grade')} />;
             case 'parent':
-                return <ParentDashboard grades={GRADES.slice(GRADES.indexOf(activeProfile.startGrade))} history={activeHistory} onBack={() => navigate('grade')} />;
+                return <ParentDashboard grades={GRADES.slice(GRADES.indexOf(activeProfile.startGrade))} history={activeHistory} learnerName={activeProfile.name} onBack={() => navigate('grade')} />;
             case 'test_builder':
                 return <TestBuilder grades={GRADES.slice(GRADES.indexOf(activeProfile.startGrade))} onStart={handleStartCustomTest} onBack={() => navigate('grade')} />;
             default:

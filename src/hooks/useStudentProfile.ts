@@ -6,8 +6,8 @@ const ACTIVE_PROFILE_KEY = 'calculation-training-active-profile-v2';
 const LEGACY_NAME_KEY = 'calculation-training-student-name';
 
 const DEFAULT_PROFILES: StudentProfile[] = [
-    { id: 'grade5', name: '小5', startGrade: '小5' },
-    { id: 'middle2', name: '中2', startGrade: '中2' },
+    { id: 'grade5', name: '小5', startGrade: '小5', dailyGoal: 10 },
+    { id: 'middle2', name: '中2', startGrade: '中2', dailyGoal: 10 },
 ];
 
 const getStartOfDay = (date: Date): number => {
@@ -19,7 +19,7 @@ const getStartOfDay = (date: Date): number => {
 const loadProfiles = (): StudentProfile[] => {
     try {
         const saved = localStorage.getItem(PROFILES_KEY);
-        if (saved) return JSON.parse(saved) as StudentProfile[];
+        if (saved) return (JSON.parse(saved) as StudentProfile[]).map(profile => ({ ...profile, dailyGoal: profile.dailyGoal || 10 }));
     } catch {
         // Fall back to safe defaults when old or damaged data cannot be read.
     }
@@ -75,5 +75,13 @@ export const useStudentProfile = (history: QuizResult[]) => {
         });
     }, [activeProfileId]);
 
-    return { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, consecutiveDays };
+    const updateDailyGoal = useCallback((dailyGoal: number) => {
+        setProfiles(current => {
+            const updated = current.map(profile => profile.id === activeProfileId ? { ...profile, dailyGoal } : profile);
+            localStorage.setItem(PROFILES_KEY, JSON.stringify(updated));
+            return updated;
+        });
+    }, [activeProfileId]);
+
+    return { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, updateDailyGoal, consecutiveDays };
 };
