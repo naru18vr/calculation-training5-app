@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { restoreBackupData, validateBackupData, type BackupData } from './backupService';
+import { downloadBackup, restoreBackupData, validateBackupData, type BackupData } from './backupService';
 
 const backup: BackupData = {
     app: 'calculation-training5-app',
@@ -14,6 +14,13 @@ const backup: BackupData = {
 };
 
 describe('backup service', () => {
+    it('reports a download failure without stopping the screen', () => {
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.stubGlobal('localStorage', { getItem: () => { throw new Error('blocked'); } });
+        expect(downloadBackup()).toBe(false);
+        vi.unstubAllGlobals();
+        consoleSpy.mockRestore();
+    });
     it('rejects damaged structured data before changing storage', () => {
         expect(() => validateBackupData({ ...backup, data: { ...backup.data, 'calculation-training-history': '{bad' } }))
             .toThrow('保存データが壊れています');

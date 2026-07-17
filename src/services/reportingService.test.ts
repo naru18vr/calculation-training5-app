@@ -39,6 +39,17 @@ describe('report records', () => {
         const storage = { getItem: (key: string) => key === REPORT_STORAGE_KEY ? JSON.stringify([report]) : null };
         expect(readReportStore(storage)).toEqual([report]);
     });
+
+    it('drops records with unsafe nested values or impossible totals', () => {
+        const good = quizResultToReport(result(new Date(2026, 6, 17, 12).getTime()));
+        const storage = { getItem: () => JSON.stringify({ version: 1, records: [
+            good,
+            { ...good, id: 'bad-array', strengths: [123] },
+            { ...good, id: 'bad-total', correct: 2, total: 1 },
+            { ...good, id: 'bad-date', date: 'not-a-date' },
+        ] }) };
+        expect(readReportStore(storage).map(item => item.id)).toEqual([good.id]);
+    });
 });
 
 describe('report text and weekly totals', () => {
@@ -83,18 +94,19 @@ describe('clipboard copy', () => {
     });
 
     it('uses fallback and reports failure when copying is unavailable', async () => {
-        const textarea = { value: '', style: {}, setAttribute: vi.fn(), focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() };
+        const textarea = { value: '', style: {}, setAttribute: vi.fn(), focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn(), remove: vi.fn() };
         vi.stubGlobal('window', { isSecureContext: false });
         vi.stubGlobal('navigator', {});
-        vi.stubGlobal('document', { createElement: () => textarea, body: { appendChild: vi.fn(), removeChild: vi.fn() }, execCommand: () => false });
+        vi.stubGlobal('document', { createElement: () => textarea, body: { appendChild: vi.fn() }, execCommand: () => false });
         expect(await copyText('報告')).toBe(false);
+        expect(textarea.remove).toHaveBeenCalled();
     });
 
     it('reports success with the legacy Android copy fallback', async () => {
-        const textarea = { value: '', style: {}, setAttribute: vi.fn(), focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn() };
+        const textarea = { value: '', style: {}, setAttribute: vi.fn(), focus: vi.fn(), select: vi.fn(), setSelectionRange: vi.fn(), remove: vi.fn() };
         vi.stubGlobal('window', { isSecureContext: false });
         vi.stubGlobal('navigator', {});
-        vi.stubGlobal('document', { createElement: () => textarea, body: { appendChild: vi.fn(), removeChild: vi.fn() }, execCommand: () => true });
+        vi.stubGlobal('document', { createElement: () => textarea, body: { appendChild: vi.fn() }, execCommand: () => true });
         expect(await copyText('報告')).toBe(true);
         expect(textarea.setSelectionRange).toHaveBeenCalled();
     });

@@ -2,24 +2,21 @@ import { useState, useCallback, useMemo } from 'react';
 import type { QuizResult, StudentProfile } from '../types';
 import { ACTIVE_PROFILE_KEY, DEFAULT_PROFILES, PROFILES_KEY, loadProfiles, safeStorageSet } from '../services/profileService';
 
-const getStartOfDay = (date: Date): number => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-}
+const getLocalDayNumber = (date: Date): number =>
+    Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
 
-const calculateStreak = (history: QuizResult[]): number => {
-    const studyDays = [...new Set(history.map(result => getStartOfDay(new Date(result.endTime))))]
+export const calculateStreak = (history: QuizResult[], now = new Date()): number => {
+    const today = getLocalDayNumber(now);
+    const studyDays = [...new Set(history.map(result => getLocalDayNumber(new Date(result.endTime))))]
+        .filter(day => day <= today)
         .sort((a, b) => b - a);
     if (studyDays.length === 0) return 0;
 
-    const today = getStartOfDay(new Date());
-    const oneDay = 24 * 60 * 60 * 1000;
-    if (studyDays[0] < today - oneDay) return 0;
+    if (studyDays[0] < today - 1) return 0;
 
     let streak = 1;
     for (let index = 1; index < studyDays.length; index++) {
-        if (studyDays[index - 1] - studyDays[index] !== oneDay) break;
+        if (studyDays[index - 1] - studyDays[index] !== 1) break;
         streak++;
     }
     return streak;

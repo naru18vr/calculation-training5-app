@@ -3,6 +3,25 @@ const fullWidthMap: Record<string, string> = {
     'ａ': 'a', 'ｂ': 'b', 'ｃ': 'c', 'ｄ': 'd', 'ｅ': 'e', 'ｆ': 'f', 'ｇ': 'g', 'ｈ': 'h', 'ｉ': 'i', 'ｊ': 'j', 'ｋ': 'k', 'ｌ': 'l', 'ｍ': 'm', 'ｎ': 'n', 'ｏ': 'o', 'ｐ': 'p', 'ｑ': 'q', 'ｒ': 'r', 'ｓ': 's', 'ｔ': 't', 'ｕ': 'u', 'ｖ': 'v', 'ｗ': 'w', 'ｘ': 'x', 'ｙ': 'y', 'ｚ': 'z',
     'Ａ': 'a', 'Ｂ': 'b', 'Ｃ': 'c', 'Ｄ': 'd', 'Ｅ': 'e', 'Ｆ': 'f', 'Ｇ': 'g', 'Ｈ': 'h', 'Ｉ': 'i', 'Ｊ': 'j', 'Ｋ': 'k', 'Ｌ': 'l', 'Ｍ': 'm', 'Ｎ': 'n', 'Ｏ': 'o', 'Ｐ': 'p', 'Ｑ': 'q', 'Ｒ': 'r', 'Ｓ': 's', 'Ｔ': 't', 'Ｕ': 'u', 'Ｖ': 'v', 'Ｗ': 'w', 'Ｘ': 'x', 'Ｙ': 'y', 'Ｚ': 'z',
     '（': '(', '）': ')', '＋': '+', '－': '-', '＊': '*', '＝': '=', '，': ',', '．': '.', '／': '/', '：': ':', '＾': '^', '√': '√', 'π': 'π', '～': '-',
+    '−': '-', '×': '*', '÷': '/', '、': ',', '²': '^2', '³': '^3', '°': '',
+};
+
+const sortValues = (values: string[]): string[] => [...values].sort((first, second) => {
+    const firstValue = parseRational(first);
+    const secondValue = parseRational(second);
+    if (firstValue !== null && secondValue !== null) return firstValue - secondValue;
+    return first.localeCompare(second);
+});
+
+const normalizeSolutionOrder = (value: string): string => {
+    const repeatedVariable = value.match(/^([a-z])=([^,]+(?:,[^=,]+)+)$/);
+    if (repeatedVariable) return `${repeatedVariable[1]}=${sortValues(repeatedVariable[2].split(',')).join(',')}`;
+
+    const assignments = value.split(',');
+    if (assignments.length > 1 && assignments.every(item => /^[a-z]=[^=,]+$/.test(item))) {
+        return assignments.sort((first, second) => first[0].localeCompare(second[0])).join(',');
+    }
+    return value;
 };
 
 export const normalizeAnswer = (input: string): string => {
@@ -28,10 +47,12 @@ export const normalizeAnswer = (input: string): string => {
     const factors = normalized.match(/\([^)]+\)/g);
     if (factors && factors.length > 1 && factors.join('') === normalized) return factors.sort().join('');
 
+    normalized = normalizeSolutionOrder(normalized);
+
     if (normalized.includes('=')) {
         const parts = normalized.split('=');
         if (parts.length === 2 && !/^[xy]=/.test(normalized)) {
-            return parts.map(part => part.split('').sort().join('')).sort().join('=');
+            return parts.sort().join('=');
         }
     }
     return normalized;
