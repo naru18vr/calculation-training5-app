@@ -46,6 +46,10 @@ const generateQuestion = (topic: Topic, index: number, difficulty: Difficulty | 
 
 export const generateMixedQuestions = (grades: Grade[], numQuestions: number, difficulty: Difficulty): Question[] => {
   const topics = grades.flatMap(grade => TOPICS_BY_GRADE[grade]);
+  return generateTopicMixQuestions(topics, numQuestions, difficulty);
+};
+
+export const generateTopicMixQuestions = (topics: Topic[], numQuestions: number, difficulty: Difficulty): Question[] => {
   if (topics.length === 0) return [];
 
   return Array.from({ length: numQuestions }, (_, index) => {
