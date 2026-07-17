@@ -32,7 +32,13 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Install deps
-        run: npm ci || npm i
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Type check
+        run: npm run typecheck
 
       - name: Build
         run: npm run build
