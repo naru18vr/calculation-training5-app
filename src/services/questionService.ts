@@ -1,15 +1,22 @@
-import type { Topic, Question, Difficulty } from '../types';
+import type { Topic, Question, Difficulty, Grade } from '../types';
+import { TOPICS_BY_GRADE } from '../constants';
 import { generateG4Question } from './grade4';
 import { generateG5Question } from './grade5';
 import { generateG6Question } from './grade6';
 import { generateM1Question } from './middle1';
 import { generateM2Question } from './middle2';
 import { generateM3Question } from './middle3';
+import { generateSupplementalQuestion, SUPPLEMENTAL_TOPIC_IDS } from './supplemental';
 
 
 const generateQuestion = (topic: Topic, index: number, difficulty: Difficulty | null): Question => {
   let q: Omit<Question, 'id'>;
   const topicPrefix = topic.id.substring(0, 2);
+
+  if (SUPPLEMENTAL_TOPIC_IDS.has(topic.id)) {
+    q = generateSupplementalQuestion(topic, difficulty || '標準');
+    return { id: index, topicId: topic.id, ...q };
+  }
 
   switch (topicPrefix) {
     case 'g4':
@@ -34,14 +41,24 @@ const generateQuestion = (topic: Topic, index: number, difficulty: Difficulty | 
       q = { text: `「${topic.name}」の問題は準備中です。`, answer: '', explanation: '' };
   }
   
-  return { id: index, ...q };
+  return { id: index, topicId: topic.id, ...q };
+};
+
+export const generateMixedQuestions = (grades: Grade[], numQuestions: number, difficulty: Difficulty): Question[] => {
+  const topics = grades.flatMap(grade => TOPICS_BY_GRADE[grade]);
+  if (topics.length === 0) return [];
+
+  return Array.from({ length: numQuestions }, (_, index) => {
+    const topic = topics[index % topics.length];
+    return generateQuestion(topic, index, difficulty);
+  }).sort(() => Math.random() - 0.5).map((question, index) => ({ ...question, id: index }));
 };
 
 export const generateQuestions = (topic: Topic, numQuestions: number, difficulty: Difficulty | null): Question[] => {
   const questions = Array.from({ length: numQuestions }, (_, i) => generateQuestion(topic, i, difficulty));
   
   // Check if the generator returned a "not ready" message
-  if (questions.some(q => q.id === undefined && q.text.includes('準備中です'))) {
+  if (questions.some(q => q.text.includes('準備中です'))) {
       return [{ id: -1, text: `「${topic.name}」の問題は準備中です。`, answer: '', explanation: '' }];
   }
   

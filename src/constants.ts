@@ -29,6 +29,8 @@ export const TOPICS_BY_GRADE: Record<Grade, Topic[]> = {
     { id: 'g5_common_multiples', name: '最小公倍数' },
     { id: 'g5_common_divisors', name: '最大公約数' },
     { id: 'g5_triangle_area', name: '三角形の面積' },
+    { id: 'g5_volume', name: '直方体・立方体の体積' },
+    { id: 'g5_average', name: '平均' },
   ],
   '小6': [
     { id: 'g6_fractions_addition', name: '分数の足し算（異分母）' },
@@ -41,6 +43,9 @@ export const TOPICS_BY_GRADE: Record<Grade, Topic[]> = {
     { id: 'g6_ratios', name: '比の計算' },
     { id: 'g6_per_unit_quantity', name: '単位量あたりの大きさ' },
     { id: 'g6_circle_area', name: '円の面積' },
+    { id: 'g6_symmetry', name: '対称な図形' },
+    { id: 'g6_scale', name: '拡大図と縮図' },
+    { id: 'g6_data', name: 'データの整理' },
   ],
   '中1': [
     { id: 'm1_int_addition', name: '正負の数：足し算' },
@@ -55,6 +60,9 @@ export const TOPICS_BY_GRADE: Record<Grade, Topic[]> = {
     { id: 'm1_inverse_proportion', name: '反比例の計算' },
     { id: 'm1_prime_factorization', name: '素因数分解' },
     { id: 'm1_solid_volume', name: '立体の体積' },
+    { id: 'm1_equation_word', name: '一次方程式の文章題' },
+    { id: 'm1_probability', name: '確率の基本' },
+    { id: 'm1_data', name: '資料の分析' },
   ],
   '中2': [
     { id: 'm2_simultaneous_equations_elimination', name: '連立方程式（加減法）' },
@@ -65,6 +73,10 @@ export const TOPICS_BY_GRADE: Record<Grade, Topic[]> = {
     { id: 'm2_expression_expansion_formula', 'name': '式の展開（公式）' },
     { id: 'm2_angle_problems', name: '多角形の角度' },
     { id: 'm2_proof_fill_in_the_blank', name: '合同の証明（穴埋め）' },
+    { id: 'm2_polynomial', name: '多項式の加減' },
+    { id: 'm2_equation_word', name: '連立方程式の文章題' },
+    { id: 'm2_probability', name: '確率' },
+    { id: 'm2_data', name: '四分位数と箱ひげ図' },
   ],
   '中3': [
     { id: 'm3_factorization_basic', name: '因数分解（x²+bx+c）' },
@@ -75,6 +87,11 @@ export const TOPICS_BY_GRADE: Record<Grade, Topic[]> = {
     { id: 'm3_quadratic_equations_factorization', name: '二次方程式（因数分解）' },
     { id: 'm3_quadratic_equations_formula', name: '二次方程式（解の公式）' },
     { id: 'm3_pythagorean_theorem', name: '三平方の定理' },
+    { id: 'm3_expansion', name: '式の展開' },
+    { id: 'm3_quadratic_function', name: '二次関数 y=ax²' },
+    { id: 'm3_similarity', name: '相似と相似比' },
+    { id: 'm3_circle', name: '円周角の定理' },
+    { id: 'm3_sampling', name: '標本調査' },
   ],
 };
 

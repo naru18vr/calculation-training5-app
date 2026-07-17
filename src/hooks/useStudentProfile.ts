@@ -1,9 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
-import type { QuizResult } from '../types';
+import { useState, useCallback, useMemo } from 'react';
+import type { QuizResult, StudentProfile } from '../types';
 
-const NAME_KEY = 'calculation-training-student-name';
-const CONSECUTIVE_DAYS_KEY = 'calculation-training-consecutive-days';
-const LAST_STUDY_DAY_KEY = 'calculation-training-last-study-day';
+const PROFILES_KEY = 'calculation-training-student-profiles-v2';
+const ACTIVE_PROFILE_KEY = 'calculation-training-active-profile-v2';
+const LEGACY_NAME_KEY = 'calculation-training-student-name';
+
+const DEFAULT_PROFILES: StudentProfile[] = [
+    { id: 'grade5', name: '小5', startGrade: '小5' },
+    { id: 'middle2', name: '中2', startGrade: '中2' },
+];
 
 const getStartOfDay = (date: Date): number => {
     const d = new Date(date);
@@ -11,68 +16,64 @@ const getStartOfDay = (date: Date): number => {
     return d.getTime();
 }
 
-export const useStudentProfile = () => {
-    const [studentName, setStudentName] = useState<string>(() => localStorage.getItem(NAME_KEY) || '');
-    const [consecutiveDays, setConsecutiveDays] = useState<number>(() => parseInt(localStorage.getItem(CONSECUTIVE_DAYS_KEY) || '0', 10));
-    
+const loadProfiles = (): StudentProfile[] => {
+    try {
+        const saved = localStorage.getItem(PROFILES_KEY);
+        if (saved) return JSON.parse(saved) as StudentProfile[];
+    } catch {
+        // Fall back to safe defaults when old or damaged data cannot be read.
+    }
+    const legacyName = localStorage.getItem(LEGACY_NAME_KEY)?.trim();
+    return legacyName
+        ? [{ ...DEFAULT_PROFILES[0], name: legacyName }, DEFAULT_PROFILES[1]]
+        : DEFAULT_PROFILES;
+};
+
+const calculateStreak = (history: QuizResult[]): number => {
+    const studyDays = [...new Set(history.map(result => getStartOfDay(new Date(result.endTime))))]
+        .sort((a, b) => b - a);
+    if (studyDays.length === 0) return 0;
+
+    const today = getStartOfDay(new Date());
+    const oneDay = 24 * 60 * 60 * 1000;
+    if (studyDays[0] < today - oneDay) return 0;
+
+    let streak = 1;
+    for (let index = 1; index < studyDays.length; index++) {
+        if (studyDays[index - 1] - studyDays[index] !== oneDay) break;
+        streak++;
+    }
+    return streak;
+};
+
+export const useStudentProfile = (history: QuizResult[]) => {
+    const [profiles, setProfiles] = useState<StudentProfile[]>(loadProfiles);
+    const [activeProfileId, setActiveProfileId] = useState<StudentProfile['id']>(() => {
+        const saved = localStorage.getItem(ACTIVE_PROFILE_KEY);
+        return saved === 'middle2' ? 'middle2' : 'grade5';
+    });
+
+    const activeProfile = profiles.find(profile => profile.id === activeProfileId) ?? profiles[0];
+    const activeHistory = useMemo(
+        () => history.filter(result => (result.studentId ?? 'grade5') === activeProfile.id),
+        [activeProfile.id, history],
+    );
+    const consecutiveDays = useMemo(() => calculateStreak(activeHistory), [activeHistory]);
+
+    const selectProfile = useCallback((profileId: StudentProfile['id']) => {
+        setActiveProfileId(profileId);
+        localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
+    }, []);
+
     const updateStudentName = useCallback((newName: string) => {
-        setStudentName(newName);
-        localStorage.setItem(NAME_KEY, newName);
-    }, []);
+        setProfiles(current => {
+            const updated = current.map(profile => profile.id === activeProfileId
+                ? { ...profile, name: newName.trim() || profile.startGrade }
+                : profile);
+            localStorage.setItem(PROFILES_KEY, JSON.stringify(updated));
+            return updated;
+        });
+    }, [activeProfileId]);
 
-    const updateConsecutiveDays = useCallback((history: QuizResult[]) => {
-        if (history.length === 0) {
-            setConsecutiveDays(0);
-            localStorage.setItem(CONSECUTIVE_DAYS_KEY, '0');
-            return;
-        }
-
-        const lastStudyTime = history[0].endTime;
-        const today = getStartOfDay(new Date());
-        const lastStudyDay = getStartOfDay(new Date(lastStudyTime));
-        const prevLastStudyDay = getStartOfDay(new Date(parseInt(localStorage.getItem(LAST_STUDY_DAY_KEY) || '0', 10)));
-        const yesterday = getStartOfDay(new Date(new Date().setDate(new Date().getDate() - 1)));
-
-        let currentStreak = parseInt(localStorage.getItem(CONSECUTIVE_DAYS_KEY) || '0', 10);
-        
-        if (lastStudyDay === today) {
-            // Already studied today, don't change streak unless it's the very first day
-             if (currentStreak === 0) {
-                 currentStreak = 1;
-             } else if (prevLastStudyDay !== today) {
-                // Studied today for the first time
-                if(prevLastStudyDay === yesterday) {
-                     currentStreak++;
-                } else {
-                     currentStreak = 1; // Streak was broken
-                }
-             }
-        } else if (lastStudyDay === yesterday) {
-            currentStreak++;
-        } else {
-            currentStreak = 1; // Streak was broken before today
-        }
-        
-        setConsecutiveDays(currentStreak);
-        localStorage.setItem(CONSECUTIVE_DAYS_KEY, currentStreak.toString());
-        localStorage.setItem(LAST_STUDY_DAY_KEY, lastStudyDay.toString());
-
-    }, []);
-    
-    // Check if streak should be reset on app load
-    useEffect(() => {
-        const lastDay = parseInt(localStorage.getItem(LAST_STUDY_DAY_KEY) || '0', 10);
-        if(!lastDay) return;
-
-        const today = getStartOfDay(new Date());
-        const yesterday = getStartOfDay(new Date(new Date().setDate(new Date().getDate() - 1)));
-
-        if(lastDay < yesterday) {
-            setConsecutiveDays(0);
-            localStorage.setItem(CONSECUTIVE_DAYS_KEY, '0');
-        }
-    },[]);
-
-
-    return { studentName, updateStudentName, consecutiveDays, updateConsecutiveDays };
+    return { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, consecutiveDays };
 };
