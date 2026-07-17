@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useMemo, useReducer, useCallback, useRef } from 'react';
-import { TOPICS_BY_GRADE, MAX_ATTEMPTS, ENCOURAGEMENT_MESSAGES, MAX_HISTORY_ENTRIES, NUM_QUESTIONS_OPTIONS, DIFFICULTY_LEVELS } from './constants';
+import { TOPICS_BY_GRADE, MAX_ATTEMPTS, ENCOURAGEMENT_MESSAGES, NUM_QUESTIONS_OPTIONS, DIFFICULTY_LEVELS } from './constants';
 import type { Grade, Topic, Question, QuizResult, QuestionResult, Difficulty, StudentProfile } from './types';
 import { generateMixedQuestions, generateQuestions, generateTopicMixQuestions } from './services/questionService';
 import { useStudentProfile } from './hooks/useStudentProfile';
@@ -11,10 +11,8 @@ import { downloadBackup, restoreBackup } from './services/backupService';
 import { downloadHistoryCsv } from './services/reportService';
 import { buildDailyReportText, buildWeeklyReportText, copyText, getWeeklySummary, mergeCompatibleReports, quizResultToReport, readReportStore, saveReportRecord } from './services/reportingService';
 import type { LearningReportRecord } from './services/reportingService';
-import { safeStorageSet } from './services/profileService';
 import { splitMathText } from './services/utils';
-
-const HISTORY_KEY = 'calculation-training-history';
+import { normalizeHistory, readHistory, saveHistory } from './services/historyService';
 
 // --- Helper Functions ---
 const formatTime = (ms: number): string => {
@@ -35,20 +33,23 @@ const Header = ({ title, onHistoryClick, onProfileClick, onParentClick, onHomeCl
     <header className="bg-white shadow-md sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-3">
-                <h1 className="text-xl sm:text-2xl font-bold text-slate-800">{title}</h1>
-                <div className="space-x-2 flex items-center">
+                <h1 className="font-bold text-slate-800">
+                    <span className="text-lg sm:hidden">数学</span>
+                    <span className="hidden text-2xl sm:inline">{title}</span>
+                </h1>
+                <div className="flex items-center sm:gap-2">
                     {showHomeButton && (
-                        <button onClick={onHomeClick} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="トップに戻る">
+                        <button onClick={onHomeClick} className="min-h-12 min-w-12 p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="トップに戻る">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3v-6a1 1 0 011-1h2a1 1 0 011 1v6h3a1 1 0 001-1V10l-7-7-7 7z" /></svg>
                         </button>
                     )}
-                     <button onClick={onProfileClick} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="プロフィール">
+                     <button onClick={onProfileClick} className="min-h-12 min-w-12 p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="プロフィール">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                     </button>
-                    <button onClick={onParentClick} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="保護者向け進捗">
+                    <button onClick={onParentClick} className="min-h-12 min-w-12 p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="保護者向け進捗">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-6m4 6V7m4 10v-3M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                     </button>
-                    <button onClick={onHistoryClick} className="p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="学習履歴">
+                    <button onClick={onHistoryClick} className="min-h-12 min-w-12 p-2 rounded-full hover:bg-slate-200 transition-colors" aria-label="学習履歴">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </button>
                 </div>
@@ -65,7 +66,7 @@ const Footer = () => (
 
 
 const BackButton = ({ onClick, children }: { onClick: () => void, children: React.ReactNode }) => (
-    <button onClick={onClick} className="mb-6 inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
+    <button onClick={onClick} className="mb-6 min-h-12 inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         {children}
     </button>
@@ -677,13 +678,14 @@ const HistoryScreen = ({ history, onBack, onClearHistory }: { history: QuizResul
 const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyGoal, examDate, targetScore, updateExamSettings, consecutiveDays, onBack }: { studentName: string, updateStudentName: (name: string) => void, dailyGoal: number, updateDailyGoal: (goal: number) => void, examDate?: string, targetScore?: number, updateExamSettings: (date: string, score: number) => void, consecutiveDays: number, onBack: () => void }) => {
     const [name, setName] = useState(studentName);
     const [restoreMessage, setRestoreMessage] = useState('');
+    const [saveMessage, setSaveMessage] = useState('');
     const [localExamDate, setLocalExamDate] = useState(examDate ?? '');
     const [localTargetScore, setLocalTargetScore] = useState(targetScore ?? 80);
     const fileInputRef = useRef<HTMLInputElement>(null);
     
     const handleSave = () => {
         updateStudentName(name);
-        alert('名前を保存しました！');
+        setSaveMessage('✓ 名前を保存しました。');
     };
 
     return (
@@ -702,12 +704,13 @@ const ProfileScreen = ({ studentName, updateStudentName, dailyGoal, updateDailyG
                         id="studentName"
                         type="text"
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
+                        onChange={(e) => { setName(e.target.value); setSaveMessage(''); }}
                         placeholder="名前を入力"
                         className="w-full p-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                 </div>
-                <button onClick={handleSave} className="w-full px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow-md hover:bg-sky-600 transition-colors">保存する</button>
+                <button onClick={handleSave} className="min-h-12 w-full px-4 py-2 bg-sky-500 text-white font-semibold rounded-lg shadow-md hover:bg-sky-600 transition-colors">保存する</button>
+                {saveMessage && <p role="status" className="mt-2 text-sm font-semibold text-emerald-700">{saveMessage}</p>}
                 <div className="mt-5"><label htmlFor="dailyGoal" className="block text-sm font-medium text-slate-700 mb-1">1日の目標問題数</label><select id="dailyGoal" value={dailyGoal} onChange={event => updateDailyGoal(Number(event.target.value))} className="w-full p-2 border border-slate-300 rounded-md"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div>
                 <div className="border-t mt-6 pt-5"><h3 className="font-bold text-slate-700 mb-1">試験の目標（任意）</h3><p className="text-xs text-slate-500 mb-3">週間報告に残り日数と目標到達状況を表示します。</p><label htmlFor="examDate" className="block text-sm mb-1">試験日</label><input id="examDate" type="date" value={localExamDate} onChange={event => setLocalExamDate(event.target.value)} className="w-full p-2 border rounded-md mb-3" /><label htmlFor="targetScore" className="block text-sm mb-1">目標正答率</label><select id="targetScore" value={localTargetScore} onChange={event => setLocalTargetScore(Number(event.target.value))} className="w-full p-2 border rounded-md mb-3"><option value={60}>60%</option><option value={70}>70%</option><option value={80}>80%</option><option value={90}>90%</option></select><button onClick={() => updateExamSettings(localExamDate, localTargetScore)} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg">試験目標を保存</button></div>
                 <div className="border-t mt-6 pt-5">
@@ -769,16 +772,7 @@ const App = () => {
     const { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, updateDailyGoal, updateExamSettings, consecutiveDays } = useStudentProfile(history);
 
     useEffect(() => {
-        try {
-            const savedHistory = localStorage.getItem(HISTORY_KEY);
-            if (savedHistory) {
-                const parsed = JSON.parse(savedHistory) as unknown;
-                setHistory(Array.isArray(parsed) ? parsed as QuizResult[] : []);
-            }
-        } catch (error) {
-            console.error("Failed to load history from localStorage:", error);
-            setHistory([]);
-        }
+        setHistory(readHistory());
         if (window.location.hash === '#history') dispatch({ type: 'NAVIGATE', to: 'history' });
     }, []);
 
@@ -851,15 +845,8 @@ const App = () => {
             saveReportRecord(quizResultToReport(newResult));
             
             setHistory(prev => {
-                const newHistory = [newResult, ...prev];
-                if (newHistory.length > MAX_HISTORY_ENTRIES) {
-                    newHistory.pop();
-                }
-                try {
-                    localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
-                } catch(error) {
-                    console.error("Failed to save history to localStorage:", error);
-                }
+                const newHistory = normalizeHistory([newResult, ...prev]);
+                saveHistory(newHistory);
                 return newHistory;
             });
         }
@@ -871,7 +858,7 @@ const App = () => {
         if(window.confirm(`${activeProfile.name}さんの学習履歴をすべて削除しますか？`)) {
             setHistory(current => {
                 const remaining = current.filter(result => (result.studentId ?? 'grade5') !== activeProfile.id);
-                safeStorageSet(HISTORY_KEY, JSON.stringify(remaining));
+                saveHistory(remaining);
                 return remaining;
             });
         }
