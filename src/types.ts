@@ -63,4 +63,6 @@ export interface StudentProfile {
   name: string;
   startGrade: '小5' | '中2';
   dailyGoal: number;
+  examDate?: string;
+  targetScore?: number;
 }
