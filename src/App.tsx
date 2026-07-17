@@ -1,11 +1,11 @@
 
 
 import React, { useState, useEffect, useMemo, useReducer, useCallback, useRef } from 'react';
-import { GRADES, TOPICS_BY_GRADE, MAX_ATTEMPTS, ENCOURAGEMENT_MESSAGES, MAX_HISTORY_ENTRIES, NUM_QUESTIONS_OPTIONS, DIFFICULTY_LEVELS } from './constants';
+import { TOPICS_BY_GRADE, MAX_ATTEMPTS, ENCOURAGEMENT_MESSAGES, MAX_HISTORY_ENTRIES, NUM_QUESTIONS_OPTIONS, DIFFICULTY_LEVELS } from './constants';
 import type { Grade, Topic, Question, QuizResult, QuestionResult, Difficulty, StudentProfile } from './types';
 import { generateMixedQuestions, generateQuestions, generateTopicMixQuestions } from './services/questionService';
 import { useStudentProfile } from './hooks/useStudentProfile';
-import { getCourseTopics, getLessonContent, getRecommendedTopic, getTopicProgress, getWeakTopics } from './services/learningService';
+import { getCourseTopics, getLessonContent, getProfileCourseGrades, getRecommendedTopic, getTopicProgress, getWeakTopics } from './services/learningService';
 import { isAnswerCorrect } from './services/answerService';
 import { downloadBackup, restoreBackup } from './services/backupService';
 import { downloadHistoryCsv } from './services/reportService';
@@ -85,14 +85,14 @@ const LearnerSelector = ({ profiles, activeProfile, onSelect }: {
                         : 'border-slate-200 bg-white text-slate-600 hover:border-sky-300'}`}
                 >
                     <span className="block font-bold">{profile.name}</span>
-                    <span className="text-xs">{profile.startGrade}から中3まで</span>
+                    <span className="text-xs">{profile.id === 'grade5' ? '小4のおさらい＋小5〜中3' : '中1のおさらい＋中2〜中3'}</span>
                 </button>
             ))}
         </div>
     </div>
 );
 
-const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixedTest, onBuildTest, dailyGoal }: {
+const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixedTest, onBuildTest, dailyGoal, reviewGrade }: {
     grades: Grade[];
     history: QuizResult[];
     onContinue: (grade: Grade, topic: Topic) => void;
@@ -100,6 +100,7 @@ const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixed
     onMixedTest: () => void;
     onBuildTest: () => void;
     dailyGoal: number;
+    reviewGrade: Grade;
 }) => {
     const courseTopics = getCourseTopics(grades);
     const recommended = getRecommendedTopic(history, grades);
@@ -157,7 +158,7 @@ const LearningDashboard = ({ grades, history, onContinue, onSelectGrade, onMixed
             <section>
                 <h3 className="font-bold text-slate-700 mb-2">学年から選ぶ</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {grades.map(grade => <button key={grade} onClick={() => onSelectGrade(grade)} className="p-3 bg-white rounded-lg shadow text-sky-700 font-bold hover:bg-sky-50">{grade}</button>)}
+                    {grades.map(grade => <button key={grade} onClick={() => onSelectGrade(grade)} className="p-3 bg-white rounded-lg shadow text-sky-700 font-bold hover:bg-sky-50">{grade}{grade === reviewGrade && <span className="block text-xs font-medium text-amber-600">おさらい</span>}</button>)}
                 </div>
             </section>
 
@@ -195,14 +196,14 @@ const ParentDashboard = ({ grades, history, learnerName, onBack }: { grades: Gra
     </div>;
 };
 
-const TestBuilder = ({ grades, onStart, onBack }: { grades: Grade[]; onStart: (topics: Topic[], count: number, difficulty: Difficulty) => void; onBack: () => void }) => {
+const TestBuilder = ({ grades, reviewGrade, onStart, onBack }: { grades: Grade[]; reviewGrade: Grade; onStart: (topics: Topic[], count: number, difficulty: Difficulty) => void; onBack: () => void }) => {
     const courseTopics = getCourseTopics(grades);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [count, setCount] = useState(20);
     const [level, setLevel] = useState<Difficulty>('標準');
     const toggle = (id: string) => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
     return <div className="p-4 sm:p-6"><BackButton onClick={onBack}>トップに戻る</BackButton><h2 className="text-2xl font-bold mb-2">範囲指定テスト</h2><p className="text-sm text-slate-500 mb-5">出題したい単元を1つ以上選んでください。</p>
-        {grades.map(grade => <section key={grade} className="mb-5"><div className="flex justify-between mb-2"><h3 className="font-bold">{grade}</h3><button onClick={() => setSelected(current => { const next = new Set(current); TOPICS_BY_GRADE[grade].forEach(topic => next.add(topic.id)); return next; })} className="text-sm text-sky-700">すべて選択</button></div><div className="grid sm:grid-cols-2 gap-2">{TOPICS_BY_GRADE[grade].map(topic => <label key={topic.id} className={`p-3 rounded-lg border cursor-pointer ${selected.has(topic.id) ? 'bg-indigo-50 border-indigo-400' : 'bg-white border-slate-200'}`}><input type="checkbox" checked={selected.has(topic.id)} onChange={() => toggle(topic.id)} className="mr-2" />{topic.name}</label>)}</div></section>)}
+        {grades.map(grade => <section key={grade} className="mb-5"><div className="flex justify-between mb-2"><h3 className="font-bold">{grade}{grade === reviewGrade && <span className="ml-2 text-xs text-amber-700 bg-amber-100 px-2 py-1 rounded-full">おさらい</span>}</h3><button onClick={() => setSelected(current => { const next = new Set(current); TOPICS_BY_GRADE[grade].forEach(topic => next.add(topic.id)); return next; })} className="text-sm text-sky-700">すべて選択</button></div><div className="grid sm:grid-cols-2 gap-2">{TOPICS_BY_GRADE[grade].map(topic => <label key={topic.id} className={`p-3 rounded-lg border cursor-pointer ${selected.has(topic.id) ? 'bg-indigo-50 border-indigo-400' : 'bg-white border-slate-200'}`}><input type="checkbox" checked={selected.has(topic.id)} onChange={() => toggle(topic.id)} className="mr-2" />{topic.name}</label>)}</div></section>)}
         <div className="sticky bottom-2 bg-white border p-4 rounded-xl shadow-xl"><div className="grid grid-cols-2 gap-3 mb-3"><select value={level} onChange={event => setLevel(event.target.value as Difficulty)} className="border rounded p-2"><option>基礎</option><option>標準</option><option>発展</option></select><select value={count} onChange={event => setCount(Number(event.target.value))} className="border rounded p-2"><option value={10}>10問</option><option value={20}>20問</option><option value={30}>30問</option></select></div><button disabled={selected.size === 0} onClick={() => onStart(courseTopics.filter(({ topic }) => selected.has(topic.id)).map(({ topic }) => topic), count, level)} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg disabled:bg-slate-300">選択した{selected.size}単元で開始</button></div>
     </div>;
 };
@@ -876,14 +877,14 @@ const App = () => {
     const renderScreen = () => {
         switch (nav.screen) {
             case 'grade':
-                const startIndex = GRADES.indexOf(activeProfile.startGrade);
-                const availableGrades = GRADES.slice(startIndex);
+                const availableGrades = getProfileCourseGrades(activeProfile);
+                const reviewGrade = availableGrades[0];
                 return <>
                     <LearnerSelector profiles={profiles} activeProfile={activeProfile} onSelect={(id) => {
                         selectProfile(id);
                         resetSelection();
                     }} />
-                    <LearningDashboard grades={availableGrades} history={activeHistory} dailyGoal={activeProfile.dailyGoal} onMixedTest={() => handleStartMixedTest(availableGrades)} onBuildTest={() => navigate('test_builder')} onSelectGrade={handleSelectGrade} onContinue={(grade, topic) => {
+                    <LearningDashboard grades={availableGrades} reviewGrade={reviewGrade} history={activeHistory} dailyGoal={activeProfile.dailyGoal} onMixedTest={() => handleStartMixedTest(availableGrades)} onBuildTest={() => navigate('test_builder')} onSelectGrade={handleSelectGrade} onContinue={(grade, topic) => {
                         setSelectedGrade(grade);
                         setSelectedTopic(topic);
                         navigate('lesson');
@@ -919,9 +920,9 @@ const App = () => {
             case 'profile':
                 return <ProfileScreen studentName={activeProfile.name} updateStudentName={updateStudentName} dailyGoal={activeProfile.dailyGoal} updateDailyGoal={updateDailyGoal} consecutiveDays={consecutiveDays} onBack={() => navigate('grade')} />;
             case 'parent':
-                return <ParentDashboard grades={GRADES.slice(GRADES.indexOf(activeProfile.startGrade))} history={activeHistory} learnerName={activeProfile.name} onBack={() => navigate('grade')} />;
+                return <ParentDashboard grades={getProfileCourseGrades(activeProfile)} history={activeHistory} learnerName={activeProfile.name} onBack={() => navigate('grade')} />;
             case 'test_builder':
-                return <TestBuilder grades={GRADES.slice(GRADES.indexOf(activeProfile.startGrade))} onStart={handleStartCustomTest} onBack={() => navigate('grade')} />;
+                return <TestBuilder grades={getProfileCourseGrades(activeProfile)} reviewGrade={getProfileCourseGrades(activeProfile)[0]} onStart={handleStartCustomTest} onBack={() => navigate('grade')} />;
             default:
                 return <div>Error</div>;
         }

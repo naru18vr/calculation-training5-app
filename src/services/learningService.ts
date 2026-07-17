@@ -1,5 +1,5 @@
-import { TOPICS_BY_GRADE } from '../constants';
-import type { Grade, QuizResult, Topic, TopicId } from '../types';
+import { GRADES, TOPICS_BY_GRADE } from '../constants';
+import type { Grade, QuizResult, StudentProfile, Topic, TopicId } from '../types';
 
 export interface TopicProgress {
     attempts: number;
@@ -59,6 +59,12 @@ export const getTopicProgress = (history: QuizResult[], topicId: TopicId): Topic
 
 export const getCourseTopics = (grades: Grade[]): Array<{ grade: Grade; topic: Topic }> =>
     grades.flatMap(grade => TOPICS_BY_GRADE[grade].map(topic => ({ grade, topic })));
+
+export const getProfileCourseGrades = (profile: StudentProfile): Grade[] => {
+    const startIndex = GRADES.indexOf(profile.startGrade);
+    const reviewStartIndex = Math.max(0, startIndex - 1);
+    return GRADES.slice(reviewStartIndex);
+};
 
 export const getRecommendedTopic = (history: QuizResult[], grades: Grade[]) => {
     const topics = getCourseTopics(grades);
