@@ -76,7 +76,7 @@ const parseRadical = (value: string): number | null => {
 
 const parsePolynomial = (value: string): Map<number, number> | null => {
     if (!value.includes('x') || !/^[0-9x^+\-]+$/.test(value)) return null;
-    const terms = value.replace(/(?<!^)(?=[+-])/g, ',').split(',');
+    const terms = value.replace(/-/g, '+-').split('+').filter(Boolean);
     const result = new Map<number, number>();
     for (const term of terms) {
         const variable = term.match(/^([+-]?\d*)x(?:\^(\d+))?$/);
