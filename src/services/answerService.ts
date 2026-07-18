@@ -65,6 +65,36 @@ const parseRational = (value: string): number | null => {
     return Number(match[1]) / Number(match[2]);
 };
 
+const parseRadical = (value: string): number | null => {
+    const match = value.match(/^(-?\d*)√(\d+)(?:\/(-?\d+))?$/);
+    if (!match) return null;
+    const coefficient = match[1] === '' ? 1 : match[1] === '-' ? -1 : Number(match[1]);
+    const denominator = match[3] === undefined ? 1 : Number(match[3]);
+    if (denominator === 0) return null;
+    return coefficient * Math.sqrt(Number(match[2])) / denominator;
+};
+
+const parsePolynomial = (value: string): Map<number, number> | null => {
+    if (!value.includes('x') || !/^[0-9x^+\-]+$/.test(value)) return null;
+    const terms = value.replace(/(?<!^)(?=[+-])/g, ',').split(',');
+    const result = new Map<number, number>();
+    for (const term of terms) {
+        const variable = term.match(/^([+-]?\d*)x(?:\^(\d+))?$/);
+        const constant = term.match(/^[+-]?\d+$/);
+        if (!variable && !constant) return null;
+        const degree = variable ? Number(variable[2] ?? 1) : 0;
+        const rawCoefficient = variable ? variable[1] : term;
+        const coefficient = rawCoefficient === '' || rawCoefficient === '+' ? 1 : rawCoefficient === '-' ? -1 : Number(rawCoefficient);
+        result.set(degree, (result.get(degree) ?? 0) + coefficient);
+    }
+    return result;
+};
+
+const polynomialsEqual = (first: Map<number, number>, second: Map<number, number>): boolean => {
+    const degrees = new Set([...first.keys(), ...second.keys()]);
+    return [...degrees].every(degree => (first.get(degree) ?? 0) === (second.get(degree) ?? 0));
+};
+
 export const isAnswerCorrect = (input: string, expected: string): boolean => {
     const normalizedInput = normalizeAnswer(input);
     const normalizedExpected = normalizeAnswer(expected);
@@ -72,5 +102,13 @@ export const isAnswerCorrect = (input: string, expected: string): boolean => {
 
     const inputNumber = parseRational(normalizedInput);
     const expectedNumber = parseRational(normalizedExpected);
-    return inputNumber !== null && expectedNumber !== null && Math.abs(inputNumber - expectedNumber) < 1e-10;
+    if (inputNumber !== null && expectedNumber !== null) return Math.abs(inputNumber - expectedNumber) < 1e-10;
+
+    const inputRadical = parseRadical(normalizedInput);
+    const expectedRadical = parseRadical(normalizedExpected);
+    if (inputRadical !== null && expectedRadical !== null) return Math.abs(inputRadical - expectedRadical) < 1e-10;
+
+    const inputPolynomial = parsePolynomial(normalizedInput);
+    const expectedPolynomial = parsePolynomial(normalizedExpected);
+    return inputPolynomial !== null && expectedPolynomial !== null && polynomialsEqual(inputPolynomial, expectedPolynomial);
 };

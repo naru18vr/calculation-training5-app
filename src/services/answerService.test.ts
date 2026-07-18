@@ -27,4 +27,11 @@ describe('answer service', () => {
         expect(isAnswerCorrect('y=3,x=2', 'x=2,y=3')).toBe(true);
         expect(isAnswerCorrect('d=a', 'a=d')).toBe(true);
     });
+
+    it('accepts equivalent radical and reordered polynomial forms', () => {
+        expect(isAnswerCorrect('2√2', '√8')).toBe(true);
+        expect(isAnswerCorrect('3√2/2', '√18/2')).toBe(true);
+        expect(isAnswerCorrect('6+5x+x^2', 'x^2+5x+6')).toBe(true);
+        expect(isAnswerCorrect('x^2+4x+6', 'x^2+5x+6')).toBe(false);
+    });
 });

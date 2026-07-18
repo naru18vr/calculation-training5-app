@@ -188,7 +188,7 @@ export const generateG6Question = (topic: Topic, difficulty: Difficulty): Omit<Q
             if (questionType === 'g6_speed') {
                 const timeInSec = randInt(120, 300); // 2 to 5 minutes
                 const distInM = randInt(500, 2000);
-                text = `${distInM}mを${Math.floor(timeInSec / 60)}分${timeInSec % 60}秒で進むと、時速何kmですか？`;
+                text = `${distInM}mを${Math.floor(timeInSec / 60)}分${timeInSec % 60}秒で進むと、時速何kmですか？（小数第2位を四捨五入して小数第1位まで）`;
                 answer = ((distInM / timeInSec) * 3.6).toFixed(1);
                 explanation = `単位を揃えます。${distInM/1000}kmを${timeInSec/3600}時間で進む計算です。答えは時速${answer}kmです。`;
             } else if (questionType === 'g6_time') {
@@ -201,7 +201,7 @@ export const generateG6Question = (topic: Topic, difficulty: Difficulty): Omit<Q
             } else { // distance
                 const speedInKmh = randInt(30, 90);
                 const timeInMin = randInt(10, 50);
-                text = `時速${speedInKmh}kmで${timeInMin}分進むと、何km進みますか？`;
+                text = `時速${speedInKmh}kmで${timeInMin}分進むと、何km進みますか？（小数第2位を四捨五入して小数第1位まで）`;
                 answer = (speedInKmh * (timeInMin / 60)).toFixed(1);
                 explanation = `距離 = 速さ × 時間。${timeInMin}分を時間に直して計算します。`;
             }
@@ -287,7 +287,7 @@ export const generateG6Question = (topic: Topic, difficulty: Difficulty): Omit<Q
             const quantity = randInt(2, 5);
             const total = randInt(1, 10) / 2; // 0.5, 1, 1.5 ...
             const unitValue = parseFloat((total / quantity).toFixed(2));
-            text = `${total}Lのジュースを${quantity}人で分けます。1人あたり何Lですか？`;
+            text = `${total}Lのジュースを${quantity}人で分けます。1人あたり何Lですか？（必要なら小数第3位を四捨五入して小数第2位まで）`;
             answer = unitValue.toString();
             explanation = `標準：合計の量を人数で割ります。${total} ÷ ${quantity} = ${answer}L。`;
         } else { // 発展
@@ -325,7 +325,12 @@ export const generateG6Question = (topic: Topic, difficulty: Difficulty): Omit<Q
         const R = 75;
         const cx = svgSize / 2, cy = svgSize / 2;
         figure = React.createElement('svg', { width: svgSize, height: svgSize, viewBox: `0 0 ${svgSize} ${svgSize}`, style: { pointerEvents: 'none' } },
-            React.createElement('circle', {
+            difficulty === '発展' ? React.createElement('path', {
+                d: `M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy} L ${cx - R} ${cy} Z`,
+                fill: "rgba(80, 160, 240, 0.3)",
+                stroke: "#334155",
+                strokeWidth: "2"
+            }) : React.createElement('circle', {
                 cx: cx, cy: cy, r: R,
                 fill: "rgba(80, 160, 240, 0.3)",
                 stroke: "#334155",
