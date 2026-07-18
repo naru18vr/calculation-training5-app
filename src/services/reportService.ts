@@ -18,12 +18,21 @@ export const createHistoryCsv = (history: QuizResult[]): string => {
     ].map(row => row.map(csvCell).join(',')).join('\r\n');
 };
 
-export const downloadHistoryCsv = (history: QuizResult[], learnerName: string) => {
-    const blob = new Blob([`\uFEFF${createHistoryCsv(history)}`], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${learnerName}-学習記録-${new Date().toISOString().slice(0, 10)}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+export const downloadHistoryCsv = (history: QuizResult[], learnerName: string): boolean => {
+    let url = '';
+    try {
+        const blob = new Blob([`\uFEFF${createHistoryCsv(history)}`], { type: 'text/csv;charset=utf-8' });
+        url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        const safeName = learnerName.replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_').trim() || '学習者';
+        anchor.download = `${safeName}-学習記録-${new Date().toISOString().slice(0, 10)}.csv`;
+        anchor.click();
+        return true;
+    } catch (error) {
+        console.error('CSV download failed:', error);
+        return false;
+    } finally {
+        if (url) URL.revokeObjectURL(url);
+    }
 };

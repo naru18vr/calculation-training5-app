@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_PROFILES, PROFILES_KEY, loadProfiles, normalizeProfiles, safeStorageSet } from './profileService';
+import { DEFAULT_PROFILES, PROFILES_KEY, isValidLocalDateKey, loadProfiles, normalizeProfiles, safeStorageSet } from './profileService';
 
 describe('profile service', () => {
+    it('accepts only real local calendar dates', () => {
+        expect(isValidLocalDateKey('2028-02-29')).toBe(true);
+        expect(isValidLocalDateKey('2026-02-29')).toBe(false);
+        expect(isValidLocalDateKey('2026-13-01')).toBe(false);
+    });
     it('repairs empty and incomplete saved profiles', () => {
         expect(normalizeProfiles([])).toEqual(DEFAULT_PROFILES);
         const profiles = normalizeProfiles([{ id: 'grade5', name: '  花子  ', dailyGoal: 999 }]);

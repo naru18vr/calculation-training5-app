@@ -92,6 +92,9 @@ export const generateG5Question = (topic: Topic, difficulty: Difficulty): Omit<Q
             den = randInt(num + 1, 12);
             explanation = `発展：数が大きいですが、同じように最大公約数で割ります。`;
         }
+        while (gcd(num, den) !== 1) {
+            num = randInt(1, den - 1);
+        }
         text = `${num*common}/${den*common} を約分しなさい。`;
         answer = `${num}/${den}`;
         explanation += `答えは ${answer} です。`;

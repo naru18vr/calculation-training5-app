@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { QuizResult, StudentProfile } from '../types';
-import { ACTIVE_PROFILE_KEY, DEFAULT_PROFILES, PROFILES_KEY, loadProfiles, safeStorageSet } from '../services/profileService';
+import { ACTIVE_PROFILE_KEY, DEFAULT_PROFILES, PROFILES_KEY, isValidLocalDateKey, loadProfiles, safeStorageSet } from '../services/profileService';
 
 const getLocalDayNumber = (date: Date): number =>
     Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
@@ -24,6 +24,7 @@ export const calculateStreak = (history: QuizResult[], now = new Date()): number
 
 export const useStudentProfile = (history: QuizResult[]) => {
     const [profiles, setProfiles] = useState<StudentProfile[]>(loadProfiles);
+    const profilesRef = useRef(profiles);
     const [activeProfileId, setActiveProfileId] = useState<StudentProfile['id']>(() => {
         try {
             return localStorage.getItem(ACTIVE_PROFILE_KEY) === 'middle2' ? 'middle2' : 'grade5';
@@ -39,37 +40,35 @@ export const useStudentProfile = (history: QuizResult[]) => {
     );
     const consecutiveDays = useMemo(() => calculateStreak(activeHistory), [activeHistory]);
 
-    const selectProfile = useCallback((profileId: StudentProfile['id']) => {
+    const selectProfile = useCallback((profileId: StudentProfile['id']): boolean => {
         setActiveProfileId(profileId);
-        safeStorageSet(ACTIVE_PROFILE_KEY, profileId);
+        return safeStorageSet(ACTIVE_PROFILE_KEY, profileId);
     }, []);
 
-    const updateStudentName = useCallback((newName: string) => {
-        setProfiles(current => {
-            const updated = current.map(profile => profile.id === activeProfileId
-                ? { ...profile, name: newName.trim() || profile.startGrade }
-                : profile);
-            safeStorageSet(PROFILES_KEY, JSON.stringify(updated));
-            return updated;
-        });
+    const updateStudentName = useCallback((newName: string): boolean => {
+        const updated = profilesRef.current.map(profile => profile.id === activeProfileId
+            ? { ...profile, name: newName.trim() || profile.startGrade }
+            : profile);
+        profilesRef.current = updated;
+        setProfiles(updated);
+        return safeStorageSet(PROFILES_KEY, JSON.stringify(updated));
     }, [activeProfileId]);
 
-    const updateDailyGoal = useCallback((dailyGoal: number) => {
-        setProfiles(current => {
-            const updated = current.map(profile => profile.id === activeProfileId ? { ...profile, dailyGoal } : profile);
-            safeStorageSet(PROFILES_KEY, JSON.stringify(updated));
-            return updated;
-        });
+    const updateDailyGoal = useCallback((dailyGoal: number): boolean => {
+        const updated = profilesRef.current.map(profile => profile.id === activeProfileId ? { ...profile, dailyGoal } : profile);
+        profilesRef.current = updated;
+        setProfiles(updated);
+        return safeStorageSet(PROFILES_KEY, JSON.stringify(updated));
     }, [activeProfileId]);
 
-    const updateExamSettings = useCallback((examDate: string, targetScore: number) => {
-        setProfiles(current => {
-            const updated = current.map(profile => profile.id === activeProfileId
-                ? { ...profile, examDate: examDate || undefined, targetScore }
-                : profile);
-            safeStorageSet(PROFILES_KEY, JSON.stringify(updated));
-            return updated;
-        });
+    const updateExamSettings = useCallback((examDate: string, targetScore: number): boolean => {
+        const safeExamDate = examDate && isValidLocalDateKey(examDate) ? examDate : undefined;
+        const updated = profilesRef.current.map(profile => profile.id === activeProfileId
+            ? { ...profile, examDate: safeExamDate, targetScore }
+            : profile);
+        profilesRef.current = updated;
+        setProfiles(updated);
+        return safeStorageSet(PROFILES_KEY, JSON.stringify(updated));
     }, [activeProfileId]);
 
     return { profiles, activeProfile, activeHistory, selectProfile, updateStudentName, updateDailyGoal, updateExamSettings, consecutiveDays };

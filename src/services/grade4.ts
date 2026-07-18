@@ -157,7 +157,10 @@ export const generateG4Question = (topic: Topic, difficulty: Difficulty): Omit<Q
             const dens = [[6, 12], [9, 12], [8, 6]];
             const [d1, d2] = dens[randInt(0, dens.length - 1)];
             const n1 = randInt(1, d1 - 1);
-            const n2 = randInt(1, d2 - 1);
+            let n2: number;
+            do {
+                n2 = randInt(1, d2 - 1);
+            } while (n1 * d2 === n2 * d1);
             text = `${n1}/${d1} と ${n2}/${d2} のうち、大きい方の分数を答えなさい。`;
             answer = (n1/d1 > n2/d2) ? `${n1}/${d1}` : `${n2}/${d2}`;
             explanation = `発展：分母が違うので通分して比べます。答えは${answer}です。`;

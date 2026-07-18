@@ -11,6 +11,16 @@ export const DEFAULT_PROFILES: StudentProfile[] = [
 
 const cloneDefaults = (): StudentProfile[] => DEFAULT_PROFILES.map(profile => ({ ...profile }));
 
+export const isValidLocalDateKey = (value: string): boolean => {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+};
+
 const normalizeProfile = (value: unknown, expected: StudentProfile): StudentProfile => {
     if (!value || typeof value !== 'object') return { ...expected };
     const candidate = value as Partial<StudentProfile>;
@@ -18,7 +28,7 @@ const normalizeProfile = (value: unknown, expected: StudentProfile): StudentProf
     const dailyGoal = typeof candidate.dailyGoal === 'number' && Number.isFinite(candidate.dailyGoal)
         ? Math.min(100, Math.max(1, Math.round(candidate.dailyGoal)))
         : expected.dailyGoal;
-    const examDate = typeof candidate.examDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(candidate.examDate)
+    const examDate = typeof candidate.examDate === 'string' && isValidLocalDateKey(candidate.examDate)
         ? candidate.examDate
         : undefined;
     const targetScore = typeof candidate.targetScore === 'number' && Number.isFinite(candidate.targetScore)
