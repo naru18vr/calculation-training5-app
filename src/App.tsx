@@ -305,11 +305,13 @@ const NumQuestionsSelector = ({ onSelect, onBack, backLabel }: { onSelect: (num:
 
 const Keypad = ({ onKeyPress }: { onKeyPress: (key: string) => void }) => {
     const keys = [
-        '7', '8', '9', '(', ')', '/', '⌫',
-        '4', '5', '6', '*', 'a', 'b', 'c',
-        '1', '2', '3', '-', 'd', 'e', 'f',
-        '0', '.', ',', '+', 'x', 'y', 'r',
-        '√', 'π', '^', ':', '=', 'OK'
+        '7', '8', '9', '⌫', '/',
+        '4', '5', '6', '(', ')',
+        '1', '2', '3', '+', '-',
+        '0', '.', ',', '*', '^',
+        'x', 'y', 'a', 'b', 'c',
+        'd', 'e', 'f', 'r', '=',
+        '√', 'π', ':', 'OK',
     ];
 
     return (
